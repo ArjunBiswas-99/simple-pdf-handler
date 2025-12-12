@@ -1,4 +1,5 @@
 # Simple PDF Handler
+by Arjun Biswas
 
 A Python-based desktop application that provides a clean and intuitive interface for comprehensive PDF manipulation. The application enables users to perform a wide range of tasks including viewing, editing, annotating, converting, and managing PDF documents.
 
@@ -55,7 +56,3 @@ A Python-based desktop application that provides a clean and intuitive interface
 ## Getting Started
 
 Instructions for setting up the development environment and running the application will be added soon.
-
-## Architecture
-
-The application follows SOLID principles and implements a Model-View-Controller (MVC) pattern to ensure maintainable and scalable code structure. The UI design applies Gestalt principles (proximity, similarity, continuity, closure) for an intuitive user experience.
