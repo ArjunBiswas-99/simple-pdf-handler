@@ -1,46 +1,128 @@
-e\Desktop\Test\simple-pdf-handler> python src/main.py            
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(172.0, 274.25)
+ive\Desktop\Test\simple-pdf-handler> python src/main.py      
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(51.0, 304.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(50.0, 296.5)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(222.5, 333.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(15.5, 297.0)
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 2, rect: PyQt6.QtCore.QRectF(15.5, 297.0, 341.5, 36.5)
+[COPY DEBUG] Rect dimensions: width=341.50, height=36.50
+
+[WORD EXTRACT DEBUG] Extracting words from page 2
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
+
+[COPY DEBUG] No words on page
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 2, rect: PyQt6.QtCore.QRectF(15.5, 297.0, 341.5, 36.5)
+[COPY DEBUG] Rect dimensions: width=341.50, height=36.50
+
+[WORD EXTRACT DEBUG] Extracting words from page 2
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
+
+[COPY DEBUG] No words on page
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 2, rect: PyQt6.QtCore.QRectF(15.5, 297.0, 341.5, 36.5)
+[COPY DEBUG] Rect dimensions: width=341.50, height=36.50
+
+[WORD EXTRACT DEBUG] Extracting words from page 2
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
+
+[COPY DEBUG] No words on page
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(181.0, 371.5)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(29.0, 400.0)
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 2, rect: PyQt6.QtCore.QRectF(29.0, 400.0, 328.5, 33.5)
+[COPY DEBUG] Rect dimensions: width=328.50, height=33.50
+
+[WORD EXTRACT DEBUG] Extracting words from page 2
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
+
+[COPY DEBUG] No words on page
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(192.0, 412.5)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(224.5, 209.0)
 [DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(688.0, 1097.0)
-[DEBUG] _select_word_at_point called for page 1
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(167.0, 269.25, 10.0, 10.0)
+[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(449.0, 418.0)
+[DEBUG] _select_word_at_point called for page 2
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(219.5, 204.0, 10.0, 10.0)
 [DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
 [DEBUG] Processing word selection request
 
 [COPY DEBUG] _copy_selected_text called
-[COPY DEBUG] Selection on page 1, rect: PyQt6.QtCore.QRectF(167.0, 269.25, 10.0, 10.0)
+[COPY DEBUG] Selection on page 2, rect: PyQt6.QtCore.QRectF(219.5, 204.0, 10.0, 10.0)
 [COPY DEBUG] Rect dimensions: width=10.00, height=10.00
+
+[WORD EXTRACT DEBUG] Extracting words from page 2
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
+
 [COPY DEBUG] No words on page
 [DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(172.0, 274.25)
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(224.5, 209.0)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 3 at PyQt6.QtCore.QPointF(449.0, 474.0)
+[DEBUG] _select_word_at_point called for page 3
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(219.5, 232.0, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 3, rect: PyQt6.QtCore.QRectF(219.5, 232.0, 10.0, 10.0)
+[COPY DEBUG] Rect dimensions: width=10.00, height=10.00
+
+[WORD EXTRACT DEBUG] Extracting words from page 3
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
+
+[COPY DEBUG] No words on page
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(224.5, 237.0)
 [DEBUG] Skipping mousePressEvent after double-click
 [DEBUG] Has word selection, checking for extension...
-[DEBUG] Extending selection from PyQt6.QtCore.QPointF(172.0, 274.25) to PyQt6.QtCore.QPointF(66.25, 238.75)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(68.0, 254.75)
+[DEBUG] Extending selection from PyQt6.QtCore.QPointF(224.5, 237.0) to PyQt6.QtCore.QPointF(47.5, 301.0)
 
 [COPY DEBUG] _copy_selected_text called
-[COPY DEBUG] Selection on page 1, rect: PyQt6.QtCore.QRectF(68.0, 254.75, 223.5, 38.25)
-[COPY DEBUG] Rect dimensions: width=223.50, height=38.25
-[COPY DEBUG] No words on page
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(32.8, 49.6)
+[COPY DEBUG] Selection on page 3, rect: PyQt6.QtCore.QRectF(70.5, 237.0, 154.0, 79.5)
+[COPY DEBUG] Rect dimensions: width=154.00, height=79.50
 
-[COPY DEBUG] _copy_selected_text called
-[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
-[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
-[COPY DEBUG] No words on page
+[WORD EXTRACT DEBUG] Extracting words from page 3
+[WORD EXTRACT DEBUG] PyMuPDF returned 0 raw word entries
+[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method
+[WORD EXTRACT DEBUG] Page text length: 0
+[WORD EXTRACT DEBUG] Trying 'blocks' method
+[WORD EXTRACT DEBUG] Found 0 blocks
+[WORD EXTRACT DEBUG] Returning 0 words after filtering
 
-[COPY DEBUG] _copy_selected_text called
-[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
-[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
-[COPY DEBUG] No words on page
-
-[COPY DEBUG] _copy_selected_text called
-[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
-[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
-[COPY DEBUG] No words on page
-
-[COPY DEBUG] _copy_selected_text called
-[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
-[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
 [COPY DEBUG] No words on page
 PS C:\Users\arjun\OneDrive\Desktop\Test\simple-pdf-handler> 
