@@ -300,51 +300,28 @@ class PyMuPDFBackend:
             Returns empty list if extraction fails or no text found
         """
         if not self._document:
-            print(f"[WORD EXTRACT DEBUG] No document loaded")
             return []
         
         if page_number < 0 or page_number >= self._document.page_count:
-            print(f"[WORD EXTRACT DEBUG] Invalid page number: {page_number}")
             return []
         
         try:
             page = self._document[page_number]
-            print(f"\n[WORD EXTRACT DEBUG] Extracting words from page {page_number}")
             
             # Get words with coordinates
             # Format: (x0, y0, x1, y1, "word", block_no, line_no, word_no)
             words = page.get_text("words")
-            print(f"[WORD EXTRACT DEBUG] PyMuPDF returned {len(words)} raw word entries")
-            
-            # Try different extraction methods if words is empty
-            if not words:
-                print("[WORD EXTRACT DEBUG] No words found with 'words' method, trying 'text' method")
-                page_text = page.get_text("text")
-                print(f"[WORD EXTRACT DEBUG] Page text length: {len(page_text) if page_text else 0}")
-                if page_text:
-                    print(f"[WORD EXTRACT DEBUG] First 200 chars: {page_text[:200]}")
-                
-                print("[WORD EXTRACT DEBUG] Trying 'blocks' method")
-                blocks = page.get_text("blocks")
-                print(f"[WORD EXTRACT DEBUG] Found {len(blocks)} blocks")
-                for i, block in enumerate(blocks[:3]):  # Show first 3 blocks
-                    print(f"[WORD EXTRACT DEBUG]   Block {i}: {block}")
             
             # Extract relevant info
             word_list = []
-            for i, word in enumerate(words):
+            for word in words:
                 if len(word) >= 5:  # Ensure word has enough elements
                     x0, y0, x1, y1, text = word[0], word[1], word[2], word[3], word[4]
                     if text.strip():
                         word_list.append((x0, y0, x1, y1, text))
-                        if i < 5:  # Show first 5 words
-                            print(f"[WORD EXTRACT DEBUG]   Word {i}: '{text}' at ({x0:.2f}, {y0:.2f})")
             
-            print(f"[WORD EXTRACT DEBUG] Returning {len(word_list)} words after filtering\n")
             return word_list
             
         except Exception as e:
-            print(f"[WORD EXTRACT DEBUG] Error extracting words from page {page_number}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error extracting words from page {page_number}: {e}")
             return []

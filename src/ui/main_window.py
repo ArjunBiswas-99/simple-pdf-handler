@@ -701,8 +701,6 @@ class MainWindow(QMainWindow):
         if not pages_to_render:
             return  # All visible pages already rendered
         
-        print(f"[LAZY RENDER] Rendering pages {pages_to_render[0]}-{pages_to_render[-1]} ({len(pages_to_render)} pages)")
-        
         # Render these pages
         for page_num in pages_to_render:
             pixmap = self._document.render_page(page_num)
@@ -711,7 +709,6 @@ class MainWindow(QMainWindow):
                 page_label = self._canvas._page_labels[page_num]
                 page_label.setPixmap(pixmap)
                 self._rendered_pages.add(page_num)
-                print(f"[LAZY RENDER] Rendered page {page_num + 1}")
         
         # Update status
         rendered_count = len(self._rendered_pages)
@@ -978,7 +975,6 @@ class MainWindow(QMainWindow):
             zoom: Zoom level to render at
         """
         page_count = self._document.get_page_count()
-        print(f"[ZOOM DEBUG] Starting zoom to {int(zoom * 100)}%, page count: {page_count}, current page: {current_page}")
         
         self._status_bar.showMessage(f"Rendering pages at {int(zoom * 100)}%...")
         
@@ -998,7 +994,6 @@ class MainWindow(QMainWindow):
             
             # PROGRESSIVE RENDERING: Update pages one by one instead of batch display
             # This keeps old pages visible while rendering new ones
-            print(f"[ZOOM DEBUG] Progressive rendering: pages {start_page}-{end_page-1}")
             
             # First, update placeholders for ALL pages to new zoom size
             # This resizes existing labels without clearing content
@@ -1033,8 +1028,6 @@ class MainWindow(QMainWindow):
                     # Update status bar
                     self._status_bar.showMessage(f"Rendering page {page_num + 1} at {int(zoom * 100)}%... ({i+1}/{end_page-start_page})")
                     QApplication.processEvents()  # Show this page immediately!
-            
-            print(f"[ZOOM DEBUG] Progressive rendering complete")
             
             # IMPORTANT: Use QTimer to ensure scroll happens after display is complete
             QTimer.singleShot(0, lambda: self._canvas.scroll_to_page(current_page))
@@ -1450,11 +1443,8 @@ class MainWindow(QMainWindow):
         Args:
             selected_text: The selected text or special command
         """
-        print(f"[DEBUG] _on_text_selected called with: {selected_text}")
-        
         # Handle word selection request from double-click
         if selected_text == "WORD_SELECTION_REQUEST":
-            print("[DEBUG] Processing word selection request")
             # Automatically perform word selection
             self._copy_selected_text()
     
@@ -1472,53 +1462,37 @@ class MainWindow(QMainWindow):
     
     def _copy_selected_text(self) -> None:
         """Copy currently selected text to clipboard."""
-        print("\n[COPY DEBUG] _copy_selected_text called")
-        
         if not self._document.is_open():
-            print("[COPY DEBUG] No document open")
             return
         
         # Get selection info from canvas
         selection_info = self._canvas.get_selection_info()
         if not selection_info:
-            print("[COPY DEBUG] No selection info from canvas")
             return
         
         page_num, selection_rect = selection_info
-        print(f"[COPY DEBUG] Selection on page {page_num}, rect: {selection_rect}")
-        print(f"[COPY DEBUG] Rect dimensions: width={selection_rect.width():.2f}, height={selection_rect.height():.2f}")
         
         # Get text words from the selected page
         words = self._document._backend.get_text_words(page_num)
         if not words:
-            print("[COPY DEBUG] No words on page")
             return
-        
-        print(f"[COPY DEBUG] Got {len(words)} words from page")
         
         # Check if selection rect is small (indicates smart selection from double/triple click)
         # vs large (indicates drag selection)
         is_smart_selection = (selection_rect.width() <= 10 and selection_rect.height() <= 10)
-        print(f"[COPY DEBUG] Is smart selection: {is_smart_selection}")
         
         if is_smart_selection:
             # Smart selection (double or triple click) - determine which by checking line
-            print("[COPY DEBUG] Using smart selection path (word/line)")
             # First try word selection
             word_text = self._select_word_at_rect(words, selection_rect, page_num)
             if word_text:
-                print(f"[COPY DEBUG] Selected word: '{word_text}'")
                 selected_text = word_text
             else:
                 # If no word found, try line selection
-                print("[COPY DEBUG] No word found, trying line selection")
                 selected_text = self._select_line_at_rect(words, selection_rect, page_num)
         else:
             # Normal drag selection
-            print("[COPY DEBUG] Using drag selection path")
             selected_text = self._extract_text_from_selection(words, selection_rect)
-        
-        print(f"[COPY DEBUG] Final selected text: '{selected_text}' (len={len(selected_text)})")
         
         if selected_text:
             # Copy to clipboard
@@ -1527,9 +1501,6 @@ class MainWindow(QMainWindow):
             
             # Show feedback
             self._status_bar.showMessage(f"Copied {len(selected_text)} characters to clipboard", 2000)
-            print(f"[COPY DEBUG] Copied to clipboard successfully\n")
-        else:
-            print("[COPY DEBUG] No text selected, nothing copied\n")
     
     def _calculate_avg_char_width(self, words: list) -> float:
         """
@@ -1618,10 +1589,6 @@ class MainWindow(QMainWindow):
         if not words or not selection_rect:
             return ""
         
-        print("\n" + "="*80)
-        print("[BENGALI DEBUG] Starting text extraction")
-        print(f"[BENGALI DEBUG] Total words on page: {len(words)}")
-        
         # Find words that intersect with selection
         selected_words = []
         for x0, y0, x1, y1, text in words:
@@ -1635,22 +1602,16 @@ class MainWindow(QMainWindow):
             if (x0 < sel_right and x1 > sel_left and
                 y0 < sel_bottom and y1 > sel_top):
                 selected_words.append((x0, y0, x1, y1, text))
-                print(f"[BENGALI DEBUG] Selected word: '{text}' | Bounds: ({x0:.2f}, {y0:.2f}) -> ({x1:.2f}, {y1:.2f}) | Width: {x1-x0:.2f}")
         
         if not selected_words:
-            print("[BENGALI DEBUG] No words selected")
             return ""
-        
-        print(f"\n[BENGALI DEBUG] Total selected words: {len(selected_words)}")
         
         # Calculate average character width for dynamic spacing threshold
         avg_char_width = self._calculate_avg_char_width(selected_words)
-        print(f"[BENGALI DEBUG] Average character width: {avg_char_width:.2f}")
         
         # Use character-width-based threshold instead of fixed 2 pixels
         # Typically, word spacing is 0.5-1.0x the character width
         space_threshold = avg_char_width * 0.6
-        print(f"[BENGALI DEBUG] Space threshold (60% of avg): {space_threshold:.2f}")
         
         # Sort words by position (top-to-bottom, left-to-right)
         # Use rounded Y values to group words on same line
@@ -1662,8 +1623,7 @@ class MainWindow(QMainWindow):
         prev_x_end = None
         prev_word = None
         
-        print("\n[BENGALI DEBUG] Processing words for spacing:")
-        for i, (x0, y0, x1, y1, word) in enumerate(selected_words):
+        for x0, y0, x1, y1, word in selected_words:
             # Calculate word center Y and height
             y_mid = (y0 + y1) / 2
             word_height = y1 - y0
@@ -1675,7 +1635,6 @@ class MainWindow(QMainWindow):
             
             if is_new_line:
                 # New line detected
-                print(f"  [{i}] '{word}' -> NEW LINE (Y diff: {abs(y_mid - prev_y_mid):.2f})")
                 text_parts.append('\n')
             elif prev_x_end is not None and prev_word is not None:
                 # Same line - check if there's a gap between words
@@ -1685,32 +1644,15 @@ class MainWindow(QMainWindow):
                 unicode_boundary = self._is_unicode_word_boundary(prev_word, word)
                 needs_space = gap > space_threshold or unicode_boundary
                 
-                print(f"  [{i}] '{word}' | Gap: {gap:.2f}px | Unicode boundary: {unicode_boundary} | Add space: {needs_space}")
-                
-                # Debug Unicode properties
-                if word:
-                    first_char = word[0]
-                    print(f"       First char: '{first_char}' (U+{ord(first_char):04X}) Category: {unicodedata.category(first_char)} Name: {unicodedata.name(first_char, 'UNKNOWN')}")
-                if prev_word:
-                    last_char = prev_word[-1]
-                    print(f"       Prev last char: '{last_char}' (U+{ord(last_char):04X}) Category: {unicodedata.category(last_char)} Name: {unicodedata.name(last_char, 'UNKNOWN')}")
-                
                 if needs_space:
                     text_parts.append(' ')
-            else:
-                print(f"  [{i}] '{word}' -> FIRST WORD")
             
             text_parts.append(word)
             prev_y_mid = y_mid
             prev_x_end = x1
             prev_word = word
         
-        result = ''.join(text_parts)
-        print(f"\n[BENGALI DEBUG] Final text: '{result}'")
-        print(f"[BENGALI DEBUG] Text length: {len(result)} characters")
-        print("="*80 + "\n")
-        
-        return result
+        return ''.join(text_parts)
     
     def _select_word_at_rect(self, words: list, click_rect, page_num: int) -> str:
         """
