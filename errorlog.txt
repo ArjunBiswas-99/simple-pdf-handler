@@ -1,0 +1,6 @@
+\simple-pdf-handler> python src/main.py  
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(61.5, 134.25)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(207.5, 147.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(37.25, 137.75)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(101.5, 99.0)
+PS C:\Users\arjun\OneDrive\Desktop\Test\simple-pdf-handler> 
