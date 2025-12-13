@@ -26,6 +26,8 @@ from ui.progress_dialog import ProgressDialog
 from core.pdf_document import PDFDocument
 from core.pdf_loader_worker import PDFLoaderWorker
 from core.zoom_render_worker import ZoomRenderWorker
+from ui.styles.theme_manager import get_theme_manager
+from ui.styles.themes import ThemeType
 from utils.constants import (
     ZOOM_LEVELS, ZOOM_LEVEL_LABELS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM,
     ZOOM_INCREMENT, LARGE_FILE_THRESHOLD, LARGE_DOCUMENT_PAGE_THRESHOLD
@@ -110,6 +112,14 @@ class MainWindow(QMainWindow):
         # View menu
         view_menu = menubar.addMenu("&View")
         
+        # Theme toggle action
+        self._theme_action = QAction("🌓 Switch to Dark Theme", self)
+        self._theme_action.setStatusTip("Toggle between light and dark themes")
+        self._theme_action.triggered.connect(self._on_toggle_theme)
+        view_menu.addAction(self._theme_action)
+        
+        view_menu.addSeparator()
+        
         # Placeholder for future view options
         view_action = QAction("View Options (Coming Soon)", self)
         view_action.setEnabled(False)
@@ -183,7 +193,8 @@ class MainWindow(QMainWindow):
         self._zoom_combo.addItems(ZOOM_LEVEL_LABELS)
         self._zoom_combo.setCurrentText("100%")
         self._zoom_combo.setEnabled(False)
-        self._zoom_combo.setMaximumWidth(80)
+        self._zoom_combo.setMinimumWidth(85)
+        self._zoom_combo.setMaximumWidth(95)
         self._zoom_combo.currentTextChanged.connect(self._on_zoom_combo_changed)
         toolbar.addWidget(self._zoom_combo)
         
@@ -514,6 +525,31 @@ class MainWindow(QMainWindow):
         if visible_page != self._document.get_current_page():
             self._document.set_current_page(visible_page)
             self._update_navigation_controls()
+    
+    def _on_toggle_theme(self) -> None:
+        """Toggle between light and dark themes."""
+        theme_manager = get_theme_manager()
+        new_theme = theme_manager.toggle_theme()
+        
+        # Update menu action text
+        if new_theme == ThemeType.DARK:
+            self._theme_action.setText("☀️ Switch to Light Theme")
+            self._status_bar.showMessage("Dark theme activated")
+        else:
+            self._theme_action.setText("🌓 Switch to Dark Theme")
+            self._status_bar.showMessage("Light theme activated")
+        
+        # Update canvas background color based on theme
+        self._update_canvas_background()
+    
+    def _update_canvas_background(self) -> None:
+        """Update canvas background color based on current theme."""
+        theme_manager = get_theme_manager()
+        
+        if theme_manager.is_dark_theme():
+            self._canvas.setStyleSheet("background-color: #1A1A1A;")
+        else:
+            self._canvas.setStyleSheet("background-color: #525252;")
     
     def _on_about(self) -> None:
         """Display about dialog."""

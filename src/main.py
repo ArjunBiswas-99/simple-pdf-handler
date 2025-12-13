@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow
+from ui.styles.theme_manager import get_theme_manager
+from ui.styles.themes import ThemeType
 
 
 def main():
@@ -34,6 +36,11 @@ def main():
     app.setApplicationName("Simple PDF Handler")
     app.setApplicationVersion("0.1.0")
     app.setOrganizationName("Arjun Biswas")
+    
+    # Initialize and apply theme
+    theme_manager = get_theme_manager()
+    theme_manager.set_application(app)
+    theme_manager.apply_theme(ThemeType.LIGHT)  # Start with light theme
     
     # Create and show main window
     window = MainWindow()
