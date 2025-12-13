@@ -15,6 +15,8 @@ GNU General Public License for more details.
 """
 
 import os
+import unicodedata
+import re
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QMenuBar, QMenu, QStatusBar,
     QToolBar, QLabel, QLineEdit, QPushButton, QWidget, QHBoxLayout, QComboBox,
@@ -1317,16 +1319,89 @@ class MainWindow(QMainWindow):
             # Show feedback
             self._status_bar.showMessage(f"Copied {len(selected_text)} characters to clipboard", 2000)
     
+    def _calculate_avg_char_width(self, words: list) -> float:
+        """
+        Calculate average character width from a list of words.
+        Uses dynamic calculation based on actual word dimensions.
+        
+        Args:
+            words: List of (x0, y0, x1, y1, word_text) tuples
+            
+        Returns:
+            Average character width in PDF coordinates
+        """
+        if not words:
+            return 5.0  # Default fallback
+        
+        total_width = 0
+        total_chars = 0
+        
+        for x0, y0, x1, y1, text in words:
+            word_width = x1 - x0
+            # Count actual characters (excluding zero-width joiners, combining marks)
+            char_count = len([c for c in text if unicodedata.category(c) not in ('Mn', 'Cf')])
+            if char_count > 0:
+                total_width += word_width
+                total_chars += char_count
+        
+        if total_chars > 0:
+            return total_width / total_chars
+        return 5.0  # Fallback
+    
+    def _is_unicode_word_boundary(self, prev_word: str, curr_word: str) -> bool:
+        """
+        Check if there should be a word boundary between two words using Unicode properties.
+        Handles complex scripts (Devanagari, Arabic, etc.) correctly.
+        
+        Args:
+            prev_word: Previous word text
+            curr_word: Current word text
+            
+        Returns:
+            True if a space should be added between words
+        """
+        if not prev_word or not curr_word:
+            return False
+        
+        # Get last char of previous word and first char of current word
+        last_char = prev_word[-1]
+        first_char = curr_word[0]
+        
+        # Check for script-specific joining behavior
+        last_cat = unicodedata.category(last_char)
+        first_cat = unicodedata.category(first_char)
+        
+        # Combining marks should not have space before them
+        if first_cat in ('Mn', 'Mc', 'Me'):
+            return False
+        
+        # Format characters (zero-width joiners, etc.) should not add space
+        if last_cat == 'Cf' or first_cat == 'Cf':
+            return False
+        
+        # Check for Devanagari/Bengali virama (halant) - word continues
+        if ord(last_char) in (0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD):
+            return False
+        
+        # Check for Arabic joining characters
+        if 0x0600 <= ord(last_char) <= 0x06FF or 0x0600 <= ord(first_char) <= 0x06FF:
+            # Arabic has complex joining rules, be conservative
+            return True
+        
+        # Default: add space between words
+        return True
+    
     def _extract_text_from_selection(self, words: list, selection_rect) -> str:
         """
         Extract text from words that intersect with selection rectangle.
+        Uses Unicode-aware spacing with character-width-based detection.
         
         Args:
             words: List of (x0, y0, x1, y1, word_text) tuples
             selection_rect: Selection rectangle in PDF coordinates
             
         Returns:
-            Extracted text string with proper spacing
+            Extracted text string with proper spacing for all languages
         """
         if not words or not selection_rect:
             return ""
@@ -1348,6 +1423,13 @@ class MainWindow(QMainWindow):
         if not selected_words:
             return ""
         
+        # Calculate average character width for dynamic spacing threshold
+        avg_char_width = self._calculate_avg_char_width(selected_words)
+        
+        # Use character-width-based threshold instead of fixed 2 pixels
+        # Typically, word spacing is 0.5-1.0x the character width
+        space_threshold = avg_char_width * 0.6
+        
         # Sort words by position (top-to-bottom, left-to-right)
         # Use rounded Y values to group words on same line
         selected_words.sort(key=lambda w: (round(w[1]), w[0]))
@@ -1356,6 +1438,7 @@ class MainWindow(QMainWindow):
         text_parts = []
         prev_y_mid = None
         prev_x_end = None
+        prev_word = None
         
         for x0, y0, x1, y1, word in selected_words:
             # Calculate word center Y and height
@@ -1370,17 +1453,23 @@ class MainWindow(QMainWindow):
             if is_new_line:
                 # New line detected
                 text_parts.append('\n')
-            elif prev_x_end is not None:
+            elif prev_x_end is not None and prev_word is not None:
                 # Same line - check if there's a gap between words
                 gap = x0 - prev_x_end
-                # If gap is more than 2 points, add space
-                # (typical word spacing is 3-10 points depending on font)
-                if gap > 2:
+                
+                # Check both pixel gap AND Unicode word boundaries
+                needs_space = (
+                    gap > space_threshold or 
+                    self._is_unicode_word_boundary(prev_word, word)
+                )
+                
+                if needs_space:
                     text_parts.append(' ')
             
             text_parts.append(word)
             prev_y_mid = y_mid
             prev_x_end = x1
+            prev_word = word
         
         return ''.join(text_parts)
     
@@ -1413,6 +1502,7 @@ class MainWindow(QMainWindow):
     def _select_line_at_rect(self, words: list, click_rect, page_num: int) -> str:
         """
         Find and select all words on the same line as the click point.
+        Uses Unicode-aware spacing for multi-language support.
         
         Args:
             words: List of (x0, y0, x1, y1, word_text) tuples
@@ -1420,7 +1510,7 @@ class MainWindow(QMainWindow):
             page_num: Page number
             
         Returns:
-            Selected line text
+            Selected line text with proper spacing
         """
         # Find the word at click point first
         click_y = click_rect.center().y()
@@ -1449,17 +1539,31 @@ class MainWindow(QMainWindow):
         line_rect = QRectF(min_x, min_y, max_x - min_x, max_y - min_y)
         self._canvas.set_selection_rect(line_rect)
         
-        # Extract text from line words with proper spacing
+        # Calculate character width for this line
+        avg_char_width = self._calculate_avg_char_width(line_words)
+        space_threshold = avg_char_width * 0.6
+        
+        # Extract text from line words with Unicode-aware spacing
         text_parts = []
         prev_x_end = None
+        prev_word = None
         
         for x0, y0, x1, y1, word in line_words:
-            if prev_x_end is not None:
+            if prev_x_end is not None and prev_word is not None:
                 gap = x0 - prev_x_end
-                if gap > 2:
+                
+                # Check both pixel gap AND Unicode word boundaries
+                needs_space = (
+                    gap > space_threshold or 
+                    self._is_unicode_word_boundary(prev_word, word)
+                )
+                
+                if needs_space:
                     text_parts.append(' ')
+            
             text_parts.append(word)
             prev_x_end = x1
+            prev_word = word
         
         return ''.join(text_parts)
     
