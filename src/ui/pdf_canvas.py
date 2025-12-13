@@ -21,6 +21,9 @@ class PDFCanvas(QScrollArea):
     # Signal emitted when text is selected
     text_selected = pyqtSignal(str)  # selected_text
     
+    # Signal emitted when zoom is requested via Ctrl/Cmd + Wheel
+    zoom_requested = pyqtSignal(bool)  # True for zoom in, False for zoom out
+    
     def __init__(self, parent=None):
         """
         Initialize the PDF canvas.
@@ -748,6 +751,32 @@ class PDFCanvas(QScrollArea):
             if isinstance(label, HighlightableLabel):
                 label.set_selection(self._selection_rect, self._zoom_level)
                 label.update()
+    
+    def wheelEvent(self, event) -> None:
+        """
+        Handle mouse wheel events for zooming with Ctrl/Cmd modifier.
+        
+        Args:
+            event: Wheel event
+        """
+        # Check if Ctrl (Windows/Linux) or Cmd (macOS) is pressed
+        modifiers = event.modifiers()
+        if modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+            # Ctrl/Cmd + Wheel = Zoom
+            delta = event.angleDelta().y()
+            
+            if delta > 0:
+                # Scroll up = Zoom in
+                self.zoom_requested.emit(True)  # Emit zoom in signal
+            elif delta < 0:
+                # Scroll down = Zoom out
+                self.zoom_requested.emit(False)  # Emit zoom out signal
+            
+            event.accept()
+            return
+        
+        # No modifier - normal scrolling
+        super().wheelEvent(event)
 
 
 class HighlightableLabel(QLabel):

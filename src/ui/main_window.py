@@ -102,6 +102,7 @@ class MainWindow(QMainWindow):
         self._canvas = PDFCanvas()
         self._canvas.verticalScrollBar().valueChanged.connect(self._on_scroll)
         self._canvas.text_selected.connect(self._on_text_selected)
+        self._canvas.zoom_requested.connect(self._on_zoom_requested)
         splitter.addWidget(self._canvas)
         
         # Set splitter properties
@@ -1276,6 +1277,18 @@ class MainWindow(QMainWindow):
             print("[DEBUG] Processing word selection request")
             # Automatically perform word selection
             self._copy_selected_text()
+    
+    def _on_zoom_requested(self, zoom_in: bool) -> None:
+        """
+        Handle zoom request from canvas (Ctrl/Cmd + Mouse wheel).
+        
+        Args:
+            zoom_in: True to zoom in, False to zoom out
+        """
+        if zoom_in:
+            self._zoom_in()
+        else:
+            self._zoom_out()
     
     def _copy_selected_text(self) -> None:
         """Copy currently selected text to clipboard."""
