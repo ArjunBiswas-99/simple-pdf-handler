@@ -977,12 +977,13 @@ class MainWindow(QMainWindow):
             current_page: Page number to scroll back to after rendering
             zoom: Zoom level to render at
         """
-        self._status_bar.showMessage(f"Applying zoom: {int(zoom * 100)}%...")
+        page_count = self._document.get_page_count()
+        print(f"[ZOOM DEBUG] Starting zoom to {int(zoom * 100)}%, page count: {page_count}, current page: {current_page}")
+        
+        self._status_bar.showMessage(f"Rendering pages at {int(zoom * 100)}%...")
         
         # Update canvas zoom level
         self._canvas.set_zoom_level(zoom)
-        
-        page_count = self._document.get_page_count()
         
         # For very large documents (>50 pages), use lazy rendering
         if page_count > 50:
@@ -991,38 +992,54 @@ class MainWindow(QMainWindow):
             start_page = max(0, current_page - window_size)
             end_page = min(page_count, current_page + window_size + 1)
             
-            # Update rendered pages tracking for lazy rendering mode
+            # IMPORTANT: Clear rendered pages tracking since we're at a new zoom level
+            # All old pages at old zoom level are now invalid
             self._rendered_pages.clear()
-            for page_num in range(start_page, end_page):
-                self._rendered_pages.add(page_num)
             
-            pixmaps = []
+            # PROGRESSIVE RENDERING: Update pages one by one instead of batch display
+            # This keeps old pages visible while rendering new ones
+            print(f"[ZOOM DEBUG] Progressive rendering: pages {start_page}-{end_page-1}")
+            
+            # First, update placeholders for ALL pages to new zoom size
+            # This resizes existing labels without clearing content
             for page_num in range(page_count):
-                if start_page <= page_num < end_page:
-                    # Render visible pages
-                    pixmap = self._document.render_page(page_num)
-                    pixmaps.append(pixmap if pixmap else QPixmap())
-                else:
-                    # Create placeholder for non-visible pages
-                    # Get page size to create appropriately sized placeholder
-                    page_size = self._document.get_page_size(page_num)
-                    if page_size:
-                        width, height = page_size
-                        scaled_width = int(width * zoom)
-                        scaled_height = int(height * zoom)
-                        placeholder = QPixmap(scaled_width, scaled_height)
-                        placeholder.fill(Qt.GlobalColor.white)
-                        pixmaps.append(placeholder)
-                    else:
-                        pixmaps.append(QPixmap())
+                page_size = self._document.get_page_size(page_num)
+                if page_size:
+                    width, height = page_size
+                    scaled_width = int(width * zoom)
+                    scaled_height = int(height * zoom)
+                    
+                    # Get existing label
+                    if page_num < len(self._canvas._page_labels):
+                        label = self._canvas._page_labels[page_num]
+                        # If this page is outside visible window, create placeholder
+                        if page_num < start_page or page_num >= end_page:
+                            placeholder = QPixmap(scaled_width, scaled_height)
+                            placeholder.fill(Qt.GlobalColor.white)
+                            label.setPixmap(placeholder)
             
-            # Display pages and then restore scroll position
-            self._canvas.display_pages(pixmaps)
+            QApplication.processEvents()  # Update placeholders
+            
+            # Now render visible pages progressively
+            for i, page_num in enumerate(range(start_page, end_page)):
+                # Render page
+                pixmap = self._document.render_page(page_num)
+                if pixmap and page_num < len(self._canvas._page_labels):
+                    # Update individual label (old page stays visible until replaced!)
+                    label = self._canvas._page_labels[page_num]
+                    label.setPixmap(pixmap)
+                    self._rendered_pages.add(page_num)
+                    
+                    # Update status bar
+                    self._status_bar.showMessage(f"Rendering page {page_num + 1} at {int(zoom * 100)}%... ({i+1}/{end_page-start_page})")
+                    QApplication.processEvents()  # Show this page immediately!
+            
+            print(f"[ZOOM DEBUG] Progressive rendering complete")
             
             # IMPORTANT: Use QTimer to ensure scroll happens after display is complete
             QTimer.singleShot(0, lambda: self._canvas.scroll_to_page(current_page))
             
-            # Keep lazy rendering active
+            # Keep lazy rendering active so scrolling triggers more rendering
             self._lazy_rendering_active = True
             
             self._status_bar.showMessage(f"Zoom: {int(zoom * 100)}% (Lazy rendering active)")
