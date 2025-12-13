@@ -1,86 +1,46 @@
-dler> python src/main.py
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(233.0, 180.0)
+e\Desktop\Test\simple-pdf-handler> python src/main.py            
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(172.0, 274.25)
 [DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(233.0, 180.0)
-[DEBUG] _select_word_at_point called for page 2
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(228.0, 175.0, 10.0, 10.0)
+[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(688.0, 1097.0)
+[DEBUG] _select_word_at_point called for page 1
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(167.0, 269.25, 10.0, 10.0)
 [DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
 [DEBUG] Processing word selection request
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 1, rect: PyQt6.QtCore.QRectF(167.0, 269.25, 10.0, 10.0)
+[COPY DEBUG] Rect dimensions: width=10.00, height=10.00
+[COPY DEBUG] No words on page
 [DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(233.0, 180.0)
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(172.0, 274.25)
 [DEBUG] Skipping mousePressEvent after double-click
 [DEBUG] Has word selection, checking for extension...
-[DEBUG] Extending selection from PyQt6.QtCore.QPointF(233.0, 180.0) to PyQt6.QtCore.QPointF(195.0, 181.0)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(49.0, 303.0)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(33.0, 290.0)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(109.0, 334.0)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(32.0, 297.0)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(316.0, 301.0)
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(316.0, 301.0)
-[DEBUG] _select_word_at_point called for page 2
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(311.0, 296.0, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(316.0, 301.0)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(305.0, 304.0)
-[DEBUG] _select_word_at_point called for page 2
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(300.0, 299.0, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(305.0, 304.0)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(82.96105824665851, 272.376571765578)
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(113.0, 371.0)
-[DEBUG] _select_word_at_point called for page 1
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(77.96105824665851, 267.376571765578, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(82.96105824665851, 272.376571765578)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(85.0, 342.0)
-[DEBUG] _select_word_at_point called for page 1
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(57.404335849256405, 246.08568071112578, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(62.404335849256405, 251.08568071112578)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(86.0, 355.0)
-[DEBUG] _select_word_at_point called for page 1
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(58.13850450630648, 255.62987325277675, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(63.13850450630648, 260.62987325277675)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(87.0, 355.0)
-[DEBUG] _select_word_at_point called for page 1
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(58.87267316335655, 255.62987325277675, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(63.87267316335655, 260.62987325277675)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
-[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(125.0, 365.0)
-[DEBUG] _select_word_at_point called for page 1
-[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(86.77108213125942, 262.9715598232775, 10.0, 10.0)
-[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
-[DEBUG] Processing word selection request
-[DEBUG] Updated page label with selection
-[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(91.77108213125942, 267.9715598232775)
-[DEBUG] Skipping mousePressEvent after double-click
-[DEBUG] Has word selection, checking for extension...
-[DEBUG] Extending selection from PyQt6.QtCore.QPointF(91.77108213125942, 267.9715598232775) to PyQt6.QtCore.QPointF(61.67016719220633, 251.08568071112578)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(34.50592688135354, 248.14900608292547)
+[DEBUG] Extending selection from PyQt6.QtCore.QPointF(172.0, 274.25) to PyQt6.QtCore.QPointF(66.25, 238.75)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(68.0, 254.75)
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 1, rect: PyQt6.QtCore.QRectF(68.0, 254.75, 223.5, 38.25)
+[COPY DEBUG] Rect dimensions: width=223.50, height=38.25
+[COPY DEBUG] No words on page
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(32.8, 49.6)
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
+[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
+[COPY DEBUG] No words on page
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
+[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
+[COPY DEBUG] No words on page
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
+[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
+[COPY DEBUG] No words on page
+
+[COPY DEBUG] _copy_selected_text called
+[COPY DEBUG] Selection on page 4, rect: PyQt6.QtCore.QRectF(32.8, 49.6, 328.26666666666665, 120.0)
+[COPY DEBUG] Rect dimensions: width=328.27, height=120.00
+[COPY DEBUG] No words on page
 PS C:\Users\arjun\OneDrive\Desktop\Test\simple-pdf-handler> 
