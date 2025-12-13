@@ -74,6 +74,13 @@ class MainWindow(QMainWindow):
         # Text selection support
         self._selection_enabled = True
         
+        # On-demand rendering support
+        self._rendered_pages = set()  # Track which pages have been rendered
+        self._lazy_rendering_active = False
+        self._render_debounce_timer = QTimer()
+        self._render_debounce_timer.setSingleShot(True)
+        self._render_debounce_timer.timeout.connect(self._render_visible_pages)
+        
         self._setup_ui()
         self._update_window_title()
     
@@ -514,8 +521,12 @@ class MainWindow(QMainWindow):
         # Update canvas zoom level
         self._canvas.set_zoom_level(DEFAULT_ZOOM)
         
-        # Render and display all pages in continuous mode
-        self._render_all_pages()
+        # Use lazy rendering for large documents to avoid UI freeze
+        if page_count > 50:
+            self._render_initial_pages_lazy()
+        else:
+            # Small document - render all pages
+            self._render_all_pages()
         
         self._status_bar.showMessage(f"Loaded: {file_name} ({page_count} pages)")
     
@@ -616,6 +627,99 @@ class MainWindow(QMainWindow):
         # Scroll to first page
         self._canvas.scroll_to_page(0)
     
+    def _render_initial_pages_lazy(self) -> None:
+        """
+        Render initial pages lazily for large documents to avoid UI freeze.
+        Only renders first 20 pages, creates placeholders for rest.
+        """
+        page_count = self._document.get_page_count()
+        zoom = self._document.get_zoom_level()
+        
+        # Render first 20 pages only
+        initial_render_count = min(20, page_count)
+        
+        self._status_bar.showMessage(f"Rendering initial {initial_render_count} of {page_count} pages...")
+        
+        # Track rendered pages
+        self._rendered_pages.clear()
+        for i in range(initial_render_count):
+            self._rendered_pages.add(i)
+        
+        pixmaps = []
+        for page_num in range(page_count):
+            if page_num < initial_render_count:
+                # Render first pages
+                pixmap = self._document.render_page(page_num)
+                pixmaps.append(pixmap if pixmap else QPixmap())
+            else:
+                # Create placeholder for remaining pages
+                page_size = self._document.get_page_size(page_num)
+                if page_size:
+                    width, height = page_size
+                    scaled_width = int(width * zoom)
+                    scaled_height = int(height * zoom)
+                    placeholder = QPixmap(scaled_width, scaled_height)
+                    placeholder.fill(Qt.GlobalColor.white)
+                    pixmaps.append(placeholder)
+                else:
+                    pixmaps.append(QPixmap())
+        
+        # Display all pages (with placeholders)
+        self._canvas.display_pages(pixmaps)
+        
+        # Scroll to first page
+        self._canvas.scroll_to_page(0)
+        
+        # Enable lazy rendering mode
+        self._lazy_rendering_active = True
+        
+        self._status_bar.showMessage(f"Loaded: {page_count} pages (Lazy rendering active)")
+    
+    def _render_visible_pages(self) -> None:
+        """
+        Render pages that are currently visible in the viewport.
+        Renders 20 pages at a time (10 before, 10 after current page).
+        """
+        if not self._lazy_rendering_active or not self._document.is_open():
+            return
+        
+        current_page = self._document.get_current_page()
+        page_count = self._document.get_page_count()
+        zoom = self._document.get_zoom_level()
+        
+        # Determine range of pages to render (current ± 10 pages)
+        window_size = 10
+        start_page = max(0, current_page - window_size)
+        end_page = min(page_count, current_page + window_size + 1)
+        
+        # Find pages that need rendering
+        pages_to_render = []
+        for page_num in range(start_page, end_page):
+            if page_num not in self._rendered_pages:
+                pages_to_render.append(page_num)
+        
+        if not pages_to_render:
+            return  # All visible pages already rendered
+        
+        print(f"[LAZY RENDER] Rendering pages {pages_to_render[0]}-{pages_to_render[-1]} ({len(pages_to_render)} pages)")
+        
+        # Render these pages
+        for page_num in pages_to_render:
+            pixmap = self._document.render_page(page_num)
+            if pixmap:
+                # Replace the placeholder with actual rendered page
+                page_label = self._canvas._page_labels[page_num]
+                page_label.setPixmap(pixmap)
+                self._rendered_pages.add(page_num)
+                print(f"[LAZY RENDER] Rendered page {page_num + 1}")
+        
+        # Update status
+        rendered_count = len(self._rendered_pages)
+        self._status_bar.showMessage(
+            f"Rendered {rendered_count}/{page_count} pages", 
+            2000
+        )
+    
     def _update_navigation_controls(self) -> None:
         """Update the state of navigation controls based on current page."""
         if not self._document.is_open():
@@ -649,7 +753,7 @@ class MainWindow(QMainWindow):
         self._last_page_btn.setEnabled(False)
     
     def _on_scroll(self) -> None:
-        """Handle scroll events to update current page tracking."""
+        """Handle scroll events to update current page tracking and trigger on-demand rendering."""
         if not self._document.is_open():
             return
         
@@ -660,6 +764,12 @@ class MainWindow(QMainWindow):
         if visible_page != self._document.get_current_page():
             self._document.set_current_page(visible_page)
             self._update_navigation_controls()
+        
+        # Trigger on-demand rendering if lazy rendering is active
+        if self._lazy_rendering_active:
+            # Use debounce timer to avoid rendering on every scroll event
+            self._render_debounce_timer.stop()
+            self._render_debounce_timer.start(200)  # 200ms delay
     
     def _on_toggle_theme(self) -> None:
         """Toggle between light and dark themes."""
