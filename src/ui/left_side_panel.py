@@ -59,11 +59,7 @@ class LeftSidePanel(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         
-        # Header with collapse button
-        header = self._create_header()
-        main_layout.addWidget(header)
-        
-        # Scrollable content area for accordion sections
+        # Scrollable content area for accordion sections (no header)
         self._scroll_area = QScrollArea()
         self._scroll_area.setWidgetResizable(True)
         self._scroll_area.setFrameShape(QFrame.Shape.NoFrame)
@@ -73,45 +69,11 @@ class LeftSidePanel(QWidget):
         self._content_widget = QWidget()
         self._content_layout = QVBoxLayout(self._content_widget)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
-        self._content_layout.setSpacing(1)
+        self._content_layout.setSpacing(0)
         self._content_layout.addStretch()  # Push sections to top
         
         self._scroll_area.setWidget(self._content_widget)
         main_layout.addWidget(self._scroll_area)
-        
-        # Styling
-        self.setStyleSheet("""
-            LeftSidePanel {
-                background-color: #f5f5f5;
-                border-right: 1px solid #d0d0d0;
-            }
-        """)
-    
-    def _create_header(self) -> QWidget:
-        """
-        Create the panel header.
-        
-        Returns:
-            Header widget
-        """
-        self._header_widget = QWidget()
-        self._header_widget.setFixedHeight(40)
-        self._header_widget.setStyleSheet("background-color: #e8e8e8; border-bottom: 1px solid #d0d0d0;")
-        
-        layout = QHBoxLayout(self._header_widget)
-        layout.setContentsMargins(8, 4, 8, 4)
-        
-        # Title label
-        self._title_label = QLabel("Left Panel")
-        font = QFont()
-        font.setPointSize(11)
-        font.setBold(True)
-        self._title_label.setFont(font)
-        layout.addWidget(self._title_label)
-        
-        layout.addStretch()
-        
-        return self._header_widget
     
     def add_section(self, section: 'AccordionSection') -> None:
         """
@@ -193,14 +155,6 @@ class AccordionSection(QWidget):
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(0)
         layout.addWidget(self._content_container)
-        
-        # Styling
-        self.setStyleSheet("""
-            AccordionSection {
-                background-color: white;
-                border: 1px solid #d0d0d0;
-            }
-        """)
     
     def _create_header(self) -> QPushButton:
         """
@@ -244,16 +198,16 @@ class AccordionSection(QWidget):
         # Set layout
         header.setLayout(header_layout)
         
-        # Styling
+        # Styling  
         header.setStyleSheet("""
             QPushButton {
-                background-color: #e8e8e8;
+                background-color: #FAFAFA;
                 border: none;
-                border-bottom: 1px solid #d0d0d0;
+                border-bottom: 1px solid #D4D4D4;
                 text-align: left;
             }
             QPushButton:hover {
-                background-color: #d8d8d8;
+                background-color: #F0F0F0;
             }
         """)
         

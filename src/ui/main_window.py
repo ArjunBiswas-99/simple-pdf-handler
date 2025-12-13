@@ -33,6 +33,7 @@ from core.text_search_worker import TextSearchWorker
 from core.search_results_manager import SearchResultsManager
 from ui.styles.theme_manager import get_theme_manager
 from ui.styles.themes import ThemeType
+from ui.styles.professional_styles import ProfessionalStyles
 from utils.constants import (
     ZOOM_LEVELS, ZOOM_LEVEL_LABELS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM,
     ZOOM_INCREMENT, LARGE_FILE_THRESHOLD, LARGE_DOCUMENT_PAGE_THRESHOLD,
@@ -75,6 +76,9 @@ class MainWindow(QMainWindow):
         """Configure the main window layout and components."""
         self.setWindowTitle("Simple PDF Handler")
         self.setMinimumSize(1000, 700)
+        
+        # Apply professional stylesheet
+        self.setStyleSheet(ProfessionalStyles.get_complete_stylesheet())
         
         # Create menu bar
         self._create_menu_bar()
@@ -177,42 +181,26 @@ class MainWindow(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
         
-        # Left panel toggle button
-        self._panel_toggle_btn = QPushButton("☰ Panel")
+        # Left panel toggle button (icon only)
+        self._panel_toggle_btn = QPushButton("☰")
         self._panel_toggle_btn.setToolTip("Toggle left panel (Ctrl+B)")
         self._panel_toggle_btn.setCheckable(True)
-        self._panel_toggle_btn.setChecked(True)  # Start with panel visible
+        self._panel_toggle_btn.setChecked(True)
         self._panel_toggle_btn.clicked.connect(self._toggle_left_panel)
-        self._panel_toggle_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
-                padding: 6px 10px;
-                font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
-            QPushButton:checked {
-                background-color: #0078d4;
-                color: white;
-                border-color: #0078d4;
-            }
-        """)
         toolbar.addWidget(self._panel_toggle_btn)
         
         toolbar.addSeparator()
         
-        # First page button
-        self._first_page_btn = QPushButton("⏮ First")
+        # First page button (icon only)
+        self._first_page_btn = QPushButton("⏮")
+        self._first_page_btn.setToolTip("First page")
         self._first_page_btn.setEnabled(False)
         self._first_page_btn.clicked.connect(self._go_to_first_page)
         toolbar.addWidget(self._first_page_btn)
         
-        # Previous page button
-        self._prev_page_btn = QPushButton("◀ Previous")
+        # Previous page button (icon only)
+        self._prev_page_btn = QPushButton("◀")
+        self._prev_page_btn.setToolTip("Previous page (←)")
         self._prev_page_btn.setEnabled(False)
         self._prev_page_btn.clicked.connect(self._go_to_previous_page)
         toolbar.addWidget(self._prev_page_btn)
@@ -230,14 +218,16 @@ class MainWindow(QMainWindow):
         self._page_count_label = QLabel(" of 0")
         toolbar.addWidget(self._page_count_label)
         
-        # Next page button
-        self._next_page_btn = QPushButton("Next ▶")
+        # Next page button (icon only)
+        self._next_page_btn = QPushButton("▶")
+        self._next_page_btn.setToolTip("Next page (→)")
         self._next_page_btn.setEnabled(False)
         self._next_page_btn.clicked.connect(self._go_to_next_page)
         toolbar.addWidget(self._next_page_btn)
         
-        # Last page button
-        self._last_page_btn = QPushButton("Last ⏭")
+        # Last page button (icon only)
+        self._last_page_btn = QPushButton("⏭")
+        self._last_page_btn.setToolTip("Last page")
         self._last_page_btn.setEnabled(False)
         self._last_page_btn.clicked.connect(self._go_to_last_page)
         toolbar.addWidget(self._last_page_btn)
@@ -245,44 +235,43 @@ class MainWindow(QMainWindow):
         # Add separator
         toolbar.addSeparator()
         
-        # Zoom out button
-        self._zoom_out_btn = QPushButton("🔍−")
+        # Zoom out button (icon only)
+        self._zoom_out_btn = QPushButton("−")
+        self._zoom_out_btn.setToolTip("Zoom out")
         self._zoom_out_btn.setEnabled(False)
-        self._zoom_out_btn.setStatusTip("Zoom out")
         self._zoom_out_btn.clicked.connect(self._zoom_out)
         toolbar.addWidget(self._zoom_out_btn)
         
         # Zoom level dropdown
-        toolbar.addWidget(QLabel(" "))
         self._zoom_combo = QComboBox()
         self._zoom_combo.addItems(ZOOM_LEVEL_LABELS)
         self._zoom_combo.setCurrentText("100%")
         self._zoom_combo.setEnabled(False)
-        self._zoom_combo.setMinimumWidth(85)
-        self._zoom_combo.setMaximumWidth(95)
+        self._zoom_combo.setMinimumWidth(75)
+        self._zoom_combo.setMaximumWidth(85)
         self._zoom_combo.currentTextChanged.connect(self._on_zoom_combo_changed)
         toolbar.addWidget(self._zoom_combo)
         
-        # Zoom in button
-        self._zoom_in_btn = QPushButton("🔍+")
+        # Zoom in button (icon only)
+        self._zoom_in_btn = QPushButton("+")
+        self._zoom_in_btn.setToolTip("Zoom in")
         self._zoom_in_btn.setEnabled(False)
-        self._zoom_in_btn.setStatusTip("Zoom in")
         self._zoom_in_btn.clicked.connect(self._zoom_in)
         toolbar.addWidget(self._zoom_in_btn)
         
-        toolbar.addWidget(QLabel("  "))
+        toolbar.addSeparator()
         
-        # Fit width button
-        self._fit_width_btn = QPushButton("Fit Width")
+        # Fit width button (icon only)
+        self._fit_width_btn = QPushButton("⬌")
+        self._fit_width_btn.setToolTip("Fit page width")
         self._fit_width_btn.setEnabled(False)
-        self._fit_width_btn.setStatusTip("Fit page width to window")
         self._fit_width_btn.clicked.connect(self._fit_width)
         toolbar.addWidget(self._fit_width_btn)
         
-        # Fit page button
-        self._fit_page_btn = QPushButton("Fit Page")
+        # Fit page button (icon only)
+        self._fit_page_btn = QPushButton("⬓")
+        self._fit_page_btn.setToolTip("Fit entire page")
         self._fit_page_btn.setEnabled(False)
-        self._fit_page_btn.setStatusTip("Fit entire page to window")
         self._fit_page_btn.clicked.connect(self._fit_page)
         toolbar.addWidget(self._fit_page_btn)
     

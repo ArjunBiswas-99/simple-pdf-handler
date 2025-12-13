@@ -52,39 +52,24 @@ class SearchPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         
-        # Search input section
-        input_label = QLabel("Search text:")
-        layout.addWidget(input_label)
-        
+        # Search input with icon
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Enter text to search...")
+        self._search_input.setPlaceholderText("🔍  Search in document...")
+        self._search_input.textChanged.connect(self._on_text_changed)
         self._search_input.returnPressed.connect(self._on_search_enter)
         layout.addWidget(self._search_input)
         
-        # Options section
-        self._case_sensitive_cb = QCheckBox("Case sensitive")
-        layout.addWidget(self._case_sensitive_cb)
+        # Options row
+        options_layout = QHBoxLayout()
+        options_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Search button
-        search_btn = QPushButton("🔍 Search")
-        search_btn.clicked.connect(self._on_search_clicked)
-        search_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #106ebe;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
-            }
-        """)
-        layout.addWidget(search_btn)
+        self._case_sensitive_cb = QCheckBox("Aa")
+        self._case_sensitive_cb.setToolTip("Match case")
+        self._case_sensitive_cb.stateChanged.connect(self._on_options_changed)
+        options_layout.addWidget(self._case_sensitive_cb)
+        
+        options_layout.addStretch()
+        layout.addLayout(options_layout)
         
         # Progress bar (hidden by default)
         self._progress_bar = QProgressBar()
@@ -93,89 +78,60 @@ class SearchPanel(QWidget):
         self._progress_bar.setVisible(False)
         layout.addWidget(self._progress_bar)
         
-        # Results section
-        results_header = QHBoxLayout()
-        results_label = QLabel("Results:")
-        results_header.addWidget(results_label)
+        # Match counter and navigation in one row
+        nav_header = QHBoxLayout()
+        nav_header.setContentsMargins(0, 4, 0, 4)
         
         self._match_counter = QLabel("No matches")
-        self._match_counter.setStyleSheet("color: #666;")
-        results_header.addWidget(self._match_counter)
-        results_header.addStretch()
+        nav_header.addWidget(self._match_counter)
         
-        layout.addLayout(results_header)
+        nav_header.addStretch()
+        
+        # Compact navigation buttons
+        self._prev_btn = QPushButton("↑")
+        self._prev_btn.setToolTip("Previous match (Shift+F3)")
+        self._prev_btn.setFixedSize(28, 28)
+        self._prev_btn.setEnabled(False)
+        self._prev_btn.clicked.connect(self._on_previous_clicked)
+        nav_header.addWidget(self._prev_btn)
+        
+        self._next_btn = QPushButton("↓")
+        self._next_btn.setToolTip("Next match (F3)")
+        self._next_btn.setFixedSize(28, 28)
+        self._next_btn.setEnabled(False)
+        self._next_btn.clicked.connect(self._on_next_clicked)
+        nav_header.addWidget(self._next_btn)
+        
+        layout.addLayout(nav_header)
         
         # Results list
         self._results_list = QListWidget()
-        self._results_list.setAlternatingRowColors(True)
         self._results_list.itemClicked.connect(self._on_result_clicked)
-        self._results_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
-                background-color: white;
-                color: #000000;
-            }
-            QListWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #e0e0e0;
-                color: #000000;
-            }
-            QListWidget::item:selected {
-                background-color: #0078d4;
-                color: white;
-            }
-            QListWidget::item:hover {
-                background-color: #e5f3ff;
-                color: #000000;
-            }
-        """)
         layout.addWidget(self._results_list)
-        
-        # Navigation buttons
-        nav_layout = QHBoxLayout()
-        
-        self._prev_btn = QPushButton("◀ Previous")
-        self._prev_btn.setEnabled(False)
-        self._prev_btn.clicked.connect(self._on_previous_clicked)
-        nav_layout.addWidget(self._prev_btn)
-        
-        self._next_btn = QPushButton("Next ▶")
-        self._next_btn.setEnabled(False)
-        self._next_btn.clicked.connect(self._on_next_clicked)
-        nav_layout.addWidget(self._next_btn)
-        
-        layout.addLayout(nav_layout)
-        
-        # Style navigation buttons
-        button_style = """
-            QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
-                padding: 6px;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
-            QPushButton:disabled {
-                background-color: #f5f5f5;
-                color: #a0a0a0;
-            }
-        """
-        self._prev_btn.setStyleSheet(button_style)
-        self._next_btn.setStyleSheet(button_style)
     
-    def _on_search_clicked(self) -> None:
-        """Handle search button click."""
+    def _on_text_changed(self, text: str) -> None:
+        """
+        Handle text changes in search input.
+        Triggers search automatically with debouncing.
+        
+        Args:
+            text: Current text in search input
+        """
+        if text.strip():
+            case_sensitive = self._case_sensitive_cb.isChecked()
+            self.search_requested.emit(text.strip(), case_sensitive)
+    
+    def _on_options_changed(self) -> None:
+        """Handle changes to search options."""
+        # Re-trigger search if there's text
         search_text = self._search_input.text().strip()
         if search_text:
             case_sensitive = self._case_sensitive_cb.isChecked()
             self.search_requested.emit(search_text, case_sensitive)
     
     def _on_search_enter(self) -> None:
-        """Handle Enter key press in search input."""
-        self._on_search_clicked()
+        """Handle Enter key press - navigate to next match."""
+        self.next_match_requested.emit()
     
     def _on_next_clicked(self) -> None:
         """Handle next button click."""
