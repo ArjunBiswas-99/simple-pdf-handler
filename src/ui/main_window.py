@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QToolBar, QLabel, QLineEdit, QPushButton, QWidget, QHBoxLayout, QComboBox,
     QSplitter, QApplication
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QAction, QKeySequence
 from ui.pdf_canvas import PDFCanvas
 from ui.progress_dialog import ProgressDialog
@@ -1265,10 +1265,15 @@ class MainWindow(QMainWindow):
         Handle text selection signal from canvas.
         
         Args:
-            selected_text: The selected text
+            selected_text: The selected text or special command
         """
-        # This signal is for future use if needed
-        pass
+        print(f"[DEBUG] _on_text_selected called with: {selected_text}")
+        
+        # Handle word selection request from double-click
+        if selected_text == "WORD_SELECTION_REQUEST":
+            print("[DEBUG] Processing word selection request")
+            # Automatically perform word selection
+            self._copy_selected_text()
     
     def _copy_selected_text(self) -> None:
         """Copy currently selected text to clipboard."""
@@ -1287,8 +1292,22 @@ class MainWindow(QMainWindow):
         if not words:
             return
         
-        # Extract text from selected words
-        selected_text = self._extract_text_from_selection(words, selection_rect)
+        # Check if selection rect is small (indicates smart selection from double/triple click)
+        # vs large (indicates drag selection)
+        is_smart_selection = (selection_rect.width() <= 10 and selection_rect.height() <= 10)
+        
+        if is_smart_selection:
+            # Smart selection (double or triple click) - determine which by checking line
+            # First try word selection
+            word_text = self._select_word_at_rect(words, selection_rect, page_num)
+            if word_text:
+                selected_text = word_text
+            else:
+                # If no word found, try line selection
+                selected_text = self._select_line_at_rect(words, selection_rect, page_num)
+        else:
+            # Normal drag selection
+            selected_text = self._extract_text_from_selection(words, selection_rect)
         
         if selected_text:
             # Copy to clipboard
@@ -1307,7 +1326,7 @@ class MainWindow(QMainWindow):
             selection_rect: Selection rectangle in PDF coordinates
             
         Returns:
-            Extracted text string
+            Extracted text string with proper spacing
         """
         if not words or not selection_rect:
             return ""
@@ -1316,45 +1335,131 @@ class MainWindow(QMainWindow):
         selected_words = []
         for x0, y0, x1, y1, text in words:
             # Check if word intersects with selection
-            word_left = x0
-            word_right = x1
-            word_top = y0
-            word_bottom = y1
-            
             sel_left = selection_rect.left()
             sel_right = selection_rect.right()
             sel_top = selection_rect.top()
             sel_bottom = selection_rect.bottom()
             
             # Check intersection
-            if (word_left < sel_right and word_right > sel_left and
-                word_top < sel_bottom and word_bottom > sel_top):
+            if (x0 < sel_right and x1 > sel_left and
+                y0 < sel_bottom and y1 > sel_top):
                 selected_words.append((x0, y0, x1, y1, text))
         
         if not selected_words:
             return ""
         
         # Sort words by position (top-to-bottom, left-to-right)
-        selected_words.sort(key=lambda w: (w[1], w[0]))  # Sort by y0, then x0
+        # Use rounded Y values to group words on same line
+        selected_words.sort(key=lambda w: (round(w[1]), w[0]))
         
-        # Combine words into text with appropriate spacing
+        # Combine words into text with proper spacing
         text_parts = []
-        prev_y = None
-        prev_x = None
+        prev_y_mid = None
+        prev_x_end = None
         
         for x0, y0, x1, y1, word in selected_words:
-            # If we're on a new line (y coordinate changed significantly)
-            if prev_y is not None and abs(y0 - prev_y) > 5:  # 5 points threshold
+            # Calculate word center Y and height
+            y_mid = (y0 + y1) / 2
+            word_height = y1 - y0
+            
+            # Determine if this is a new line
+            # Use word height as threshold (more reliable than fixed points)
+            is_new_line = (prev_y_mid is not None and 
+                          abs(y_mid - prev_y_mid) > word_height * 0.3)
+            
+            if is_new_line:
+                # New line detected
                 text_parts.append('\n')
-            # If same line but gap between words
-            elif prev_x is not None and prev_y is not None:
-                # Check if there's a gap between words
-                if x0 - prev_x > 5:  # 5 points threshold for word spacing
+            elif prev_x_end is not None:
+                # Same line - check if there's a gap between words
+                gap = x0 - prev_x_end
+                # If gap is more than 2 points, add space
+                # (typical word spacing is 3-10 points depending on font)
+                if gap > 2:
                     text_parts.append(' ')
             
             text_parts.append(word)
-            prev_y = y0
-            prev_x = x1
+            prev_y_mid = y_mid
+            prev_x_end = x1
+        
+        return ''.join(text_parts)
+    
+    def _select_word_at_rect(self, words: list, click_rect, page_num: int) -> str:
+        """
+        Find and select the word at the click point.
+        
+        Args:
+            words: List of (x0, y0, x1, y1, word_text) tuples
+            click_rect: Small rectangle around click point
+            page_num: Page number
+            
+        Returns:
+            Selected word text
+        """
+        # Find word that intersects with click rect
+        click_x = click_rect.center().x()
+        click_y = click_rect.center().y()
+        
+        for x0, y0, x1, y1, word_text in words:
+            # Check if click point is within word bounds
+            if x0 <= click_x <= x1 and y0 <= click_y <= y1:
+                # Found the word - create selection rect for it
+                word_rect = QRectF(x0, y0, x1 - x0, y1 - y0)
+                self._canvas.set_selection_rect(word_rect)
+                return word_text
+        
+        return ""
+    
+    def _select_line_at_rect(self, words: list, click_rect, page_num: int) -> str:
+        """
+        Find and select all words on the same line as the click point.
+        
+        Args:
+            words: List of (x0, y0, x1, y1, word_text) tuples
+            click_rect: Small rectangle around click point
+            page_num: Page number
+            
+        Returns:
+            Selected line text
+        """
+        # Find the word at click point first
+        click_y = click_rect.center().y()
+        
+        # Find all words on the same line (similar Y coordinate)
+        line_words = []
+        for x0, y0, x1, y1, word_text in words:
+            y_mid = (y0 + y1) / 2
+            # If word's Y coordinate is close to click Y, it's on same line
+            if abs(y_mid - click_y) < (y1 - y0):  # Within one word height
+                line_words.append((x0, y0, x1, y1, word_text))
+        
+        if not line_words:
+            return ""
+        
+        # Sort words left to right
+        line_words.sort(key=lambda w: w[0])
+        
+        # Find bounding box of all words on line
+        min_x = min(w[0] for w in line_words)
+        min_y = min(w[1] for w in line_words)
+        max_x = max(w[2] for w in line_words)
+        max_y = max(w[3] for w in line_words)
+        
+        # Create selection rect for entire line
+        line_rect = QRectF(min_x, min_y, max_x - min_x, max_y - min_y)
+        self._canvas.set_selection_rect(line_rect)
+        
+        # Extract text from line words with proper spacing
+        text_parts = []
+        prev_x_end = None
+        
+        for x0, y0, x1, y1, word in line_words:
+            if prev_x_end is not None:
+                gap = x0 - prev_x_end
+                if gap > 2:
+                    text_parts.append(' ')
+            text_parts.append(word)
+            prev_x_end = x1
         
         return ''.join(text_parts)
     

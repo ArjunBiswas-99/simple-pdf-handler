@@ -48,6 +48,12 @@ class PDFCanvas(QScrollArea):
         self._selection_page: Optional[int] = None
         self._selection_rect: Optional[QRectF] = None
         self._selected_text: str = ""
+        self._has_word_selection = False  # Track if we have a word selection from double-click
+        
+        # Click tracking for triple click and preventing mousePressEvent after double-click
+        self._last_double_click_time = 0
+        self._triple_click_threshold = 500  # milliseconds
+        self._ignore_next_mouse_press = False  # Flag to skip mousePress after double-click
         
         self._setup_ui()
     
@@ -61,6 +67,9 @@ class PDFCanvas(QScrollArea):
         # Enable mouse tracking for cursor changes
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
+        
+        # Enable focus to receive keyboard events
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
         # Create container widget for pages
         self._container = QWidget()
@@ -289,11 +298,18 @@ class PDFCanvas(QScrollArea):
     
     def mousePressEvent(self, event) -> None:
         """
-        Handle mouse press event to start text selection.
+        Handle mouse press event to start or extend text selection.
         
         Args:
             event: Mouse event
         """
+        # Skip this event if it's right after a double-click
+        if self._ignore_next_mouse_press:
+            self._ignore_next_mouse_press = False
+            print("[DEBUG] Skipping mousePressEvent after double-click")
+            event.accept()
+            return
+        
         if not self._selection_enabled or event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
             return
@@ -312,17 +328,75 @@ class PDFCanvas(QScrollArea):
             point_in_page.y() / self._zoom_level
         )
         
-        # Start selection
-        self._is_selecting = True
-        self._selection_start = pdf_point
-        self._selection_current = pdf_point
-        self._selection_page = page_num
-        self._update_selection_rect()
+        # Check if we have a word selection that can be extended
+        if self._has_word_selection and self._selection_rect and page_num == self._selection_page:
+            print(f"[DEBUG] Has word selection, checking for extension...")
+            
+            # Any click or drag from word selection extends it
+            # Keep the original selection start point
+            self._selection_current = pdf_point
+            self._is_selecting = True
+            self._has_word_selection = False  # Convert to regular selection for dragging
+            self._update_selection_rect()
+            
+            print(f"[DEBUG] Extending selection from {self._selection_start} to {pdf_point}")
+        else:
+            # No existing word selection - start new drag selection
+            print(f"[DEBUG] Starting new selection at {pdf_point}")
+            self._has_word_selection = False
+            self._is_selecting = True
+            self._selection_start = pdf_point
+            self._selection_current = pdf_point
+            self._selection_page = page_num
+            self._update_selection_rect()
         
         # Update display
         if isinstance(page_label, HighlightableLabel):
             page_label.set_selection(self._selection_rect, self._zoom_level)
             page_label.update()
+        
+        event.accept()
+    
+    def mouseDoubleClickEvent(self, event) -> None:
+        """
+        Handle double-click event to select word.
+        
+        Args:
+            event: Mouse event
+        """
+        print(f"[DEBUG] Double-click detected! Button: {event.button()}, Selection enabled: {self._selection_enabled}")
+        
+        if not self._selection_enabled or event.button() != Qt.MouseButton.LeftButton:
+            super().mouseDoubleClickEvent(event)
+            return
+        
+        # Set flag to ignore the next mousePressEvent (Qt sends both events for double-click)
+        self._ignore_next_mouse_press = True
+        
+        # Track time for triple-click detection
+        import time
+        current_time = time.time() * 1000
+        self._last_double_click_time = current_time
+        
+        # Get which page was clicked
+        page_info = self._get_page_at_position(event.pos())
+        if page_info is None:
+            print("[DEBUG] No page found at position")
+            super().mouseDoubleClickEvent(event)
+            return
+        
+        page_num, page_label, point_in_page = page_info
+        print(f"[DEBUG] Double-click on page {page_num} at {point_in_page}")
+        
+        # Convert to PDF coordinates
+        pdf_point = QPointF(
+            point_in_page.x() / self._zoom_level,
+            point_in_page.y() / self._zoom_level
+        )
+        
+        # Select word at this point
+        self._select_word_at_point(page_num, pdf_point, page_label)
+        print(f"[DEBUG] Word selection attempted at PDF point {pdf_point}")
         
         event.accept()
     
@@ -372,7 +446,11 @@ class PDFCanvas(QScrollArea):
         Args:
             event: Mouse event
         """
-        if self._is_selecting and event.button() == Qt.MouseButton.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mouseReleaseEvent(event)
+            return
+        
+        if self._is_selecting:
             self._is_selecting = False
             
             # If selection is too small, clear it
@@ -384,6 +462,25 @@ class PDFCanvas(QScrollArea):
             
             event.accept()
             return
+        
+        # Check for triple-click (mouseDoubleClickEvent already handled double-click)
+        import time
+        current_time = time.time() * 1000
+        if current_time - self._last_double_click_time < self._triple_click_threshold:
+            # Triple-click detected!
+            page_info = self._get_page_at_position(event.pos())
+            if page_info:
+                page_num, page_label, point_in_page = page_info
+                pdf_point = QPointF(
+                    point_in_page.x() / self._zoom_level,
+                    point_in_page.y() / self._zoom_level
+                )
+                
+                # Select line at this point
+                self._select_line_at_point(page_num, pdf_point, page_label)
+                
+                event.accept()
+                return
         
         super().mouseReleaseEvent(event)
     
@@ -447,6 +544,7 @@ class PDFCanvas(QScrollArea):
         self._selection_page = None
         self._selection_rect = None
         self._selected_text = ""
+        self._has_word_selection = False
         
         # Update the affected page label
         if page_to_update is not None and 0 <= page_to_update < len(self._page_labels):
@@ -474,6 +572,182 @@ class PDFCanvas(QScrollArea):
             zoom_level: New zoom level
         """
         self._zoom_level = zoom_level
+    
+    def _select_word_at_point(self, page_num: int, pdf_point: QPointF, page_label) -> None:
+        """
+        Select the word at the given point (double-click behavior).
+        
+        Args:
+            page_num: Page number
+            pdf_point: Point in PDF coordinates
+            page_label: Page label widget
+        """
+        print(f"[DEBUG] _select_word_at_point called for page {page_num}")
+        
+        # Store page and point for word selection
+        self._selection_page = page_num
+        self._selection_start = pdf_point  # Store for potential extension
+        
+        # Create a small rect around the click point to find the word
+        click_tolerance = 5  # pixels in PDF coordinates
+        self._selection_rect = QRectF(
+            pdf_point.x() - click_tolerance,
+            pdf_point.y() - click_tolerance,
+            click_tolerance * 2,
+            click_tolerance * 2
+        )
+        
+        print(f"[DEBUG] Created selection rect: {self._selection_rect}")
+        
+        # Mark that we have a word selection (enables extension on drag)
+        self._has_word_selection = True
+        
+        # Emit a signal to trigger immediate word selection in MainWindow
+        self.text_selected.emit("WORD_SELECTION_REQUEST")
+        
+        # Update display
+        if isinstance(page_label, HighlightableLabel):
+            page_label.set_selection(self._selection_rect, self._zoom_level)
+            page_label.update()
+            print("[DEBUG] Updated page label with selection")
+    
+    def _select_line_at_point(self, page_num: int, pdf_point: QPointF, page_label) -> None:
+        """
+        Select the line/paragraph at the given point (triple-click behavior).
+        
+        Args:
+            page_num: Page number
+            pdf_point: Point in PDF coordinates
+            page_label: Page label widget
+        """
+        # Store page and point for line selection
+        self._selection_page = page_num
+        
+        # Create a rect around the click point for line selection
+        click_tolerance = 5
+        self._selection_rect = QRectF(
+            pdf_point.x() - click_tolerance,
+            pdf_point.y() - click_tolerance,
+            click_tolerance * 2,
+            click_tolerance * 2
+        )
+        
+        # Mark this as a line selection (click count >= 3)
+        self._is_line_selection = True
+        
+        # Update display
+        if isinstance(page_label, HighlightableLabel):
+            # MainWindow will update with full line bounds
+            page_label.update()
+    
+    
+    def set_selection_rect(self, selection_rect: QRectF) -> None:
+        """
+        Set the selection rectangle directly (used by MainWindow for smart selection).
+        
+        Args:
+            selection_rect: Selection rectangle in PDF coordinates
+        """
+        self._selection_rect = selection_rect
+        
+        # When MainWindow updates selection rect after word selection, keep the flag
+        # so user can still drag to extend
+        self._has_word_selection = True
+        
+        # Update selection start/end for arrow key navigation
+        if selection_rect:
+            self._selection_start = QPointF(selection_rect.left(), selection_rect.top())
+            self._selection_current = QPointF(selection_rect.right(), selection_rect.bottom())
+        
+        print(f"[DEBUG] set_selection_rect called with rect: {selection_rect}, _has_word_selection=True")
+        
+        # Update the display on the appropriate page
+        if self._selection_page is not None and 0 <= self._selection_page < len(self._page_labels):
+            label = self._page_labels[self._selection_page]
+            if isinstance(label, HighlightableLabel):
+                label.set_selection(self._selection_rect, self._zoom_level)
+                label.update()
+    
+    def keyPressEvent(self, event) -> None:
+        """
+        Handle key press events for Shift+Arrow selection extension.
+        
+        Args:
+            event: Key event
+        """
+        # Only handle if Shift is pressed and we have a selection
+        if not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier) or not self._selection_rect:
+            super().keyPressEvent(event)
+            return
+        
+        # Arrow key step size in PDF coordinates (adjust based on testing)
+        step = 10  # pixels in PDF coordinates
+        
+        if event.key() == Qt.Key.Key_Right:
+            # Extend selection to the right
+            if self._selection_current:
+                self._selection_current = QPointF(
+                    self._selection_current.x() + step,
+                    self._selection_current.y()
+                )
+                self._has_word_selection = False
+                self._update_selection_rect()
+                self._update_selection_display()
+                event.accept()
+                print(f"[DEBUG] Shift+Right: Extended selection to {self._selection_current}")
+                return
+        
+        elif event.key() == Qt.Key.Key_Left:
+            # Extend selection to the left or shrink from right
+            if self._selection_current:
+                self._selection_current = QPointF(
+                    self._selection_current.x() - step,
+                    self._selection_current.y()
+                )
+                self._has_word_selection = False
+                self._update_selection_rect()
+                self._update_selection_display()
+                event.accept()
+                print(f"[DEBUG] Shift+Left: Extended selection to {self._selection_current}")
+                return
+        
+        elif event.key() == Qt.Key.Key_Down:
+            # Extend selection downward
+            if self._selection_current:
+                self._selection_current = QPointF(
+                    self._selection_current.x(),
+                    self._selection_current.y() + step
+                )
+                self._has_word_selection = False
+                self._update_selection_rect()
+                self._update_selection_display()
+                event.accept()
+                print(f"[DEBUG] Shift+Down: Extended selection to {self._selection_current}")
+                return
+        
+        elif event.key() == Qt.Key.Key_Up:
+            # Extend selection upward
+            if self._selection_current:
+                self._selection_current = QPointF(
+                    self._selection_current.x(),
+                    self._selection_current.y() - step
+                )
+                self._has_word_selection = False
+                self._update_selection_rect()
+                self._update_selection_display()
+                event.accept()
+                print(f"[DEBUG] Shift+Up: Extended selection to {self._selection_current}")
+                return
+        
+        super().keyPressEvent(event)
+    
+    def _update_selection_display(self) -> None:
+        """Update the visual display of the current selection."""
+        if self._selection_page is not None and 0 <= self._selection_page < len(self._page_labels):
+            label = self._page_labels[self._selection_page]
+            if isinstance(label, HighlightableLabel):
+                label.set_selection(self._selection_rect, self._zoom_level)
+                label.update()
 
 
 class HighlightableLabel(QLabel):
