@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer, QRectF
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence, QPixmap
 from ui.pdf_canvas import PDFCanvas
 from ui.progress_dialog import ProgressDialog
 from ui.left_side_panel import LeftSidePanel, AccordionSection
@@ -860,7 +860,8 @@ class MainWindow(QMainWindow):
     
     def _render_zoom_sync(self, current_page: int, zoom: float) -> None:
         """
-        Render all pages at new zoom level synchronously.
+        Render pages at new zoom level.
+        For large documents, only renders visible pages for instant zoom.
         
         Args:
             current_page: Page number to scroll back to after rendering
@@ -871,13 +872,44 @@ class MainWindow(QMainWindow):
         # Update canvas zoom level
         self._canvas.set_zoom_level(zoom)
         
-        # Re-render all pages
-        self._render_all_pages()
+        page_count = self._document.get_page_count()
+        
+        # For very large documents (>50 pages), use lazy rendering
+        if page_count > 50:
+            # Only render a window of pages around current page
+            window_size = 10  # Render 10 pages before and after
+            start_page = max(0, current_page - window_size)
+            end_page = min(page_count, current_page + window_size + 1)
+            
+            pixmaps = []
+            for page_num in range(page_count):
+                if start_page <= page_num < end_page:
+                    # Render visible pages
+                    pixmap = self._document.render_page(page_num)
+                    pixmaps.append(pixmap if pixmap else QPixmap())
+                else:
+                    # Create placeholder for non-visible pages
+                    # Get page size to create appropriately sized placeholder
+                    page_size = self._document.get_page_size(page_num)
+                    if page_size:
+                        width, height = page_size
+                        scaled_width = int(width * zoom)
+                        scaled_height = int(height * zoom)
+                        placeholder = QPixmap(scaled_width, scaled_height)
+                        placeholder.fill(Qt.GlobalColor.white)
+                        pixmaps.append(placeholder)
+                    else:
+                        pixmaps.append(QPixmap())
+            
+            self._canvas.display_pages(pixmaps)
+            self._status_bar.showMessage(f"Zoom: {int(zoom * 100)}% (Lazy rendering active)")
+        else:
+            # Small document - render all pages
+            self._render_all_pages()
+            self._status_bar.showMessage(f"Zoom: {int(zoom * 100)}%")
         
         # Restore scroll position
         self._canvas.scroll_to_page(current_page)
-        
-        self._status_bar.showMessage(f"Zoom: {int(zoom * 100)}%")
     
     def _render_zoom_async(self, current_page: int, zoom: float) -> None:
         """
