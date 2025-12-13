@@ -32,6 +32,7 @@ from utils.constants import (
     ZOOM_LEVELS, ZOOM_LEVEL_LABELS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM,
     ZOOM_INCREMENT, LARGE_FILE_THRESHOLD, LARGE_DOCUMENT_PAGE_THRESHOLD
 )
+from utils.settings_manager import get_settings_manager
 
 
 class MainWindow(QMainWindow):
@@ -265,16 +266,26 @@ class MainWindow(QMainWindow):
     
     def _on_open_file(self) -> None:
         """Handle file open action."""
-        # Show file dialog
+        # Get settings manager to retrieve last directory
+        settings = get_settings_manager()
+        last_dir = settings.get_last_open_directory()
+        
+        # Show file dialog starting from last opened directory
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open PDF File",
-            "",
+            last_dir,
             "PDF Files (*.pdf);;All Files (*)"
         )
         
         if not file_path:
             return
+        
+        # Save the directory for next time
+        settings.set_last_open_directory(file_path)
+        
+        # Add to recent files
+        settings.add_recent_file(file_path)
         
         # Check file size to decide loading strategy
         file_size = os.path.getsize(file_path)
