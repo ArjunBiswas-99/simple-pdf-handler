@@ -1419,6 +1419,10 @@ class MainWindow(QMainWindow):
         if not words or not selection_rect:
             return ""
         
+        print("\n" + "="*80)
+        print("[BENGALI DEBUG] Starting text extraction")
+        print(f"[BENGALI DEBUG] Total words on page: {len(words)}")
+        
         # Find words that intersect with selection
         selected_words = []
         for x0, y0, x1, y1, text in words:
@@ -1432,16 +1436,22 @@ class MainWindow(QMainWindow):
             if (x0 < sel_right and x1 > sel_left and
                 y0 < sel_bottom and y1 > sel_top):
                 selected_words.append((x0, y0, x1, y1, text))
+                print(f"[BENGALI DEBUG] Selected word: '{text}' | Bounds: ({x0:.2f}, {y0:.2f}) -> ({x1:.2f}, {y1:.2f}) | Width: {x1-x0:.2f}")
         
         if not selected_words:
+            print("[BENGALI DEBUG] No words selected")
             return ""
+        
+        print(f"\n[BENGALI DEBUG] Total selected words: {len(selected_words)}")
         
         # Calculate average character width for dynamic spacing threshold
         avg_char_width = self._calculate_avg_char_width(selected_words)
+        print(f"[BENGALI DEBUG] Average character width: {avg_char_width:.2f}")
         
         # Use character-width-based threshold instead of fixed 2 pixels
         # Typically, word spacing is 0.5-1.0x the character width
         space_threshold = avg_char_width * 0.6
+        print(f"[BENGALI DEBUG] Space threshold (60% of avg): {space_threshold:.2f}")
         
         # Sort words by position (top-to-bottom, left-to-right)
         # Use rounded Y values to group words on same line
@@ -1453,7 +1463,8 @@ class MainWindow(QMainWindow):
         prev_x_end = None
         prev_word = None
         
-        for x0, y0, x1, y1, word in selected_words:
+        print("\n[BENGALI DEBUG] Processing words for spacing:")
+        for i, (x0, y0, x1, y1, word) in enumerate(selected_words):
             # Calculate word center Y and height
             y_mid = (y0 + y1) / 2
             word_height = y1 - y0
@@ -1465,26 +1476,42 @@ class MainWindow(QMainWindow):
             
             if is_new_line:
                 # New line detected
+                print(f"  [{i}] '{word}' -> NEW LINE (Y diff: {abs(y_mid - prev_y_mid):.2f})")
                 text_parts.append('\n')
             elif prev_x_end is not None and prev_word is not None:
                 # Same line - check if there's a gap between words
                 gap = x0 - prev_x_end
                 
                 # Check both pixel gap AND Unicode word boundaries
-                needs_space = (
-                    gap > space_threshold or 
-                    self._is_unicode_word_boundary(prev_word, word)
-                )
+                unicode_boundary = self._is_unicode_word_boundary(prev_word, word)
+                needs_space = gap > space_threshold or unicode_boundary
+                
+                print(f"  [{i}] '{word}' | Gap: {gap:.2f}px | Unicode boundary: {unicode_boundary} | Add space: {needs_space}")
+                
+                # Debug Unicode properties
+                if word:
+                    first_char = word[0]
+                    print(f"       First char: '{first_char}' (U+{ord(first_char):04X}) Category: {unicodedata.category(first_char)} Name: {unicodedata.name(first_char, 'UNKNOWN')}")
+                if prev_word:
+                    last_char = prev_word[-1]
+                    print(f"       Prev last char: '{last_char}' (U+{ord(last_char):04X}) Category: {unicodedata.category(last_char)} Name: {unicodedata.name(last_char, 'UNKNOWN')}")
                 
                 if needs_space:
                     text_parts.append(' ')
+            else:
+                print(f"  [{i}] '{word}' -> FIRST WORD")
             
             text_parts.append(word)
             prev_y_mid = y_mid
             prev_x_end = x1
             prev_word = word
         
-        return ''.join(text_parts)
+        result = ''.join(text_parts)
+        print(f"\n[BENGALI DEBUG] Final text: '{result}'")
+        print(f"[BENGALI DEBUG] Text length: {len(result)} characters")
+        print("="*80 + "\n")
+        
+        return result
     
     def _select_word_at_rect(self, words: list, click_rect, page_num: int) -> str:
         """

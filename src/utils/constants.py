@@ -42,7 +42,7 @@ ZOOM_INCREMENT = 0.25  # 25% steps
 LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
 
 # Page count threshold for threaded zoom rendering
-LARGE_DOCUMENT_PAGE_THRESHOLD = 10
+LARGE_DOCUMENT_PAGE_THRESHOLD = 100
 
 # Search debounce delay in milliseconds
 # Prevents starting search on every keystroke
