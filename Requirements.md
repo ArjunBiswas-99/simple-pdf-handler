@@ -79,11 +79,6 @@
 *   **T2.3:** The application shall support standard UI elements like menu bars, toolbars, status bars, and dialogs.
 
 ### T3: PDF Processing Libraries
-*   **T3.1:** The application shall use PyMuPDF (fitz) for core PDF rendering, manipulation, and editing.
-*   **T3.2:** The application shall use pdf2docx for PDF to Word conversion.
-*   **T3.3:** The application shall use pytesseract for OCR functionality.
-*   **T3.4:** The application shall use Pillow for image processing tasks.
-*   **T3.5:** The application shall use beautifulsoup4 and lxml for HTML conversion features.
 
 ### T4: Performance
 *   **T4.1:** The application shall render PDF pages efficiently, even for moderately large files (up to 50MB).

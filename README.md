@@ -47,11 +47,11 @@ A Python-based desktop application that provides a clean and intuitive interface
 
 * **Language:** Python 3.8+
 * **GUI Framework:** PyQt6
-* **PDF Processing:** PyMuPDF (fitz)
-* **OCR:** pytesseract
-* **Image Processing:** Pillow
-* **Document Conversion:** pdf2docx
-* **HTML/XML Parsing:** beautifulsoup4, lxml
+* **PDF Processing:** 
+* **OCR:** 
+* **Image Processing:** 
+* **Document Conversion:** 
+* **HTML/XML Parsing:** 
 
 ## Getting Started
 
