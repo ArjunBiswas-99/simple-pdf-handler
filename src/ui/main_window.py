@@ -991,6 +991,11 @@ class MainWindow(QMainWindow):
             start_page = max(0, current_page - window_size)
             end_page = min(page_count, current_page + window_size + 1)
             
+            # Update rendered pages tracking for lazy rendering mode
+            self._rendered_pages.clear()
+            for page_num in range(start_page, end_page):
+                self._rendered_pages.add(page_num)
+            
             pixmaps = []
             for page_num in range(page_count):
                 if start_page <= page_num < end_page:
@@ -1011,15 +1016,23 @@ class MainWindow(QMainWindow):
                     else:
                         pixmaps.append(QPixmap())
             
+            # Display pages and then restore scroll position
             self._canvas.display_pages(pixmaps)
+            
+            # IMPORTANT: Use QTimer to ensure scroll happens after display is complete
+            QTimer.singleShot(0, lambda: self._canvas.scroll_to_page(current_page))
+            
+            # Keep lazy rendering active
+            self._lazy_rendering_active = True
+            
             self._status_bar.showMessage(f"Zoom: {int(zoom * 100)}% (Lazy rendering active)")
         else:
             # Small document - render all pages
             self._render_all_pages()
             self._status_bar.showMessage(f"Zoom: {int(zoom * 100)}%")
-        
-        # Restore scroll position
-        self._canvas.scroll_to_page(current_page)
+            
+            # Restore scroll position for small documents too
+            QTimer.singleShot(0, lambda: self._canvas.scroll_to_page(current_page))
     
     def _render_zoom_async(self, current_page: int, zoom: float) -> None:
         """
