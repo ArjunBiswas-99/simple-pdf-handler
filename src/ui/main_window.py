@@ -17,20 +17,26 @@ GNU General Public License for more details.
 import os
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QMenuBar, QMenu, QStatusBar,
-    QToolBar, QLabel, QLineEdit, QPushButton, QWidget, QHBoxLayout, QComboBox
+    QToolBar, QLabel, QLineEdit, QPushButton, QWidget, QHBoxLayout, QComboBox,
+    QSplitter
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QKeySequence
 from ui.pdf_canvas import PDFCanvas
 from ui.progress_dialog import ProgressDialog
+from ui.left_side_panel import LeftSidePanel, AccordionSection
+from ui.search_panel import SearchPanel
 from core.pdf_document import PDFDocument
 from core.pdf_loader_worker import PDFLoaderWorker
 from core.zoom_render_worker import ZoomRenderWorker
+from core.text_search_worker import TextSearchWorker
+from core.search_results_manager import SearchResultsManager
 from ui.styles.theme_manager import get_theme_manager
 from ui.styles.themes import ThemeType
 from utils.constants import (
     ZOOM_LEVELS, ZOOM_LEVEL_LABELS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM,
-    ZOOM_INCREMENT, LARGE_FILE_THRESHOLD, LARGE_DOCUMENT_PAGE_THRESHOLD
+    ZOOM_INCREMENT, LARGE_FILE_THRESHOLD, LARGE_DOCUMENT_PAGE_THRESHOLD,
+    SEARCH_DEBOUNCE_DELAY
 )
 from utils.settings_manager import get_settings_manager
 
@@ -50,6 +56,18 @@ class MainWindow(QMainWindow):
         self._document = PDFDocument()
         self._loader_worker = None
         self._zoom_worker = None
+        
+        # Search functionality
+        self._search_worker = None
+        self._search_results = SearchResultsManager()
+        self._search_debounce_timer = QTimer()
+        self._search_debounce_timer.setSingleShot(True)
+        self._search_debounce_timer.timeout.connect(self._execute_search)
+        
+        # Track search panel for direct access
+        self._search_panel = None
+        self._search_section = None
+        
         self._setup_ui()
         self._update_window_title()
     
@@ -61,13 +79,31 @@ class MainWindow(QMainWindow):
         # Create menu bar
         self._create_menu_bar()
         
-        # Create toolbar
+        # Create navigation toolbar
         self._create_toolbar()
         
-        # Create PDF canvas as central widget
+        # Create main content area with sidebar and canvas
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Create sidebar
+        self._left_panel = LeftSidePanel()
+        splitter.addWidget(self._left_panel)
+        
+        # Create PDF canvas
         self._canvas = PDFCanvas()
         self._canvas.verticalScrollBar().valueChanged.connect(self._on_scroll)
-        self.setCentralWidget(self._canvas)
+        splitter.addWidget(self._canvas)
+        
+        # Set splitter properties
+        splitter.setStretchFactor(0, 0)  # Sidebar doesn't stretch
+        splitter.setStretchFactor(1, 1)  # Canvas stretches
+        splitter.setSizes([300, 700])     # Initial sizes
+        
+        # Set as central widget
+        self.setCentralWidget(splitter)
+        
+        # Create and add search section to sidebar
+        self._create_search_section()
         
         # Create status bar
         self._create_status_bar()
@@ -140,6 +176,34 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Navigation")
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
+        
+        # Left panel toggle button
+        self._panel_toggle_btn = QPushButton("☰ Panel")
+        self._panel_toggle_btn.setToolTip("Toggle left panel (Ctrl+B)")
+        self._panel_toggle_btn.setCheckable(True)
+        self._panel_toggle_btn.setChecked(True)  # Start with panel visible
+        self._panel_toggle_btn.clicked.connect(self._toggle_left_panel)
+        self._panel_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+            QPushButton:checked {
+                background-color: #0078d4;
+                color: white;
+                border-color: #0078d4;
+            }
+        """)
+        toolbar.addWidget(self._panel_toggle_btn)
+        
+        toolbar.addSeparator()
         
         # First page button
         self._first_page_btn = QPushButton("⏮ First")
@@ -222,6 +286,27 @@ class MainWindow(QMainWindow):
         self._fit_page_btn.clicked.connect(self._fit_page)
         toolbar.addWidget(self._fit_page_btn)
     
+    def _create_search_section(self) -> None:
+        """Create and configure the search accordion section."""
+        # Create search panel
+        self._search_panel = SearchPanel()
+        
+        # Connect search panel signals
+        self._search_panel.search_requested.connect(self._on_search_requested)
+        self._search_panel.next_match_requested.connect(self._find_next)
+        self._search_panel.previous_match_requested.connect(self._find_previous)
+        self._search_panel.result_selected.connect(self._on_search_result_selected)
+        
+        # Create accordion section
+        self._search_section = AccordionSection("Search", "🔍")
+        self._search_section.set_content(self._search_panel)
+        
+        # Start expanded
+        self._search_section.set_expanded(True)
+        
+        # Add to sidebar
+        self._left_panel.add_section(self._search_section)
+    
     def _create_status_bar(self) -> None:
         """Create and configure the status bar."""
         self._status_bar = QStatusBar()
@@ -229,7 +314,7 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("Ready")
     
     def _setup_keyboard_shortcuts(self) -> None:
-        """Set up keyboard shortcuts for navigation."""
+        """Set up keyboard shortcuts for navigation and search."""
         # Previous page shortcuts
         prev_shortcut1 = QAction(self)
         prev_shortcut1.setShortcut(QKeySequence(Qt.Key.Key_Left))
@@ -263,6 +348,35 @@ class MainWindow(QMainWindow):
         last_shortcut.setShortcut(QKeySequence(Qt.Key.Key_End))
         last_shortcut.triggered.connect(self._go_to_last_page)
         self.addAction(last_shortcut)
+        
+        # Search shortcuts
+        find_shortcut = QAction(self)
+        find_shortcut.setShortcut(QKeySequence("Ctrl+F"))
+        find_shortcut.triggered.connect(self._focus_search)
+        self.addAction(find_shortcut)
+        
+        find_next_shortcut = QAction(self)
+        find_next_shortcut.setShortcut(QKeySequence(Qt.Key.Key_F3))
+        find_next_shortcut.triggered.connect(self._find_next)
+        self.addAction(find_next_shortcut)
+        
+        find_prev_shortcut = QAction(self)
+        find_prev_shortcut.setShortcut(QKeySequence("Shift+F3"))
+        find_prev_shortcut.triggered.connect(self._find_previous)
+        self.addAction(find_prev_shortcut)
+        
+        # Panel toggle shortcut
+        panel_toggle_shortcut = QAction(self)
+        panel_toggle_shortcut.setShortcut(QKeySequence("Ctrl+B"))
+        panel_toggle_shortcut.triggered.connect(self._toggle_left_panel)
+        self.addAction(panel_toggle_shortcut)
+    
+    def _toggle_left_panel(self) -> None:
+        """Toggle the visibility of the left side panel."""
+        if self._left_panel:
+            self._left_panel.toggle_collapse()
+            # Update button state
+            self._panel_toggle_btn.setChecked(not self._left_panel.is_collapsed())
     
     def _on_open_file(self) -> None:
         """Handle file open action."""
@@ -839,6 +953,300 @@ class MainWindow(QMainWindow):
             self._zoom_combo.setCurrentText(zoom_text)
             self._zoom_combo.blockSignals(False)
     
+    def _focus_search(self) -> None:
+        """Focus the search panel and expand if collapsed."""
+        if not self._document.is_open():
+            return
+        
+        # Expand sidebar if collapsed
+        if self._left_panel.is_collapsed():
+            self._left_panel.toggle_collapse()
+        
+        # Expand search section if collapsed
+        if not self._search_section.is_expanded():
+            self._search_section.set_expanded(True)
+        
+        # Focus search input
+        self._search_panel.focus_search_input()
+    
+    def _on_search_requested(self, search_text: str, case_sensitive: bool) -> None:
+        """
+        Handle search request from search panel.
+        
+        Args:
+            search_text: Text to search for
+            case_sensitive: Whether search is case-sensitive
+        """
+        if not self._document.is_open() or not search_text:
+            return
+        
+        # Execute search with debouncing
+        self._search_debounce_timer.stop()
+        self._search_debounce_timer.start(SEARCH_DEBOUNCE_DELAY)
+    
+    def _on_search_result_selected(self, page_num: int, match_idx: int) -> None:
+        """
+        Handle selection of a search result from the results list.
+        
+        Args:
+            page_num: Page number of the selected result
+            match_idx: Match index on the page
+        """
+        # Find the match in results and navigate to it
+        results = self._search_results.get_page_results(page_num)
+        if match_idx < len(results):
+            # Update current match to the selected one
+            # We need to find the global match index
+            pages_with_matches = self._search_results.get_pages_with_matches()
+            global_idx = 0
+            for p in pages_with_matches:
+                if p == page_num:
+                    global_idx += match_idx
+                    break
+                global_idx += len(self._search_results.get_page_results(p))
+            
+            # Navigate to this match
+            self._search_results._current_match_index = global_idx
+            self._update_search_highlights()
+            self._jump_to_current_match()
+            self._update_match_counter()
+    
+    def _execute_search(self) -> None:
+        """Execute the text search operation in background thread."""
+        search_text = self._search_panel.get_search_text()
+        
+        if not search_text or not self._document.is_open():
+            return
+        
+        # Cancel any ongoing search
+        if self._search_worker and self._search_worker.isRunning():
+            self._search_worker.cancel()
+            self._search_worker.wait()
+        
+        # Clear previous results
+        self._search_results.clear()
+        self._canvas.clear_search_highlights()
+        
+        # Create and configure search worker
+        self._search_worker = TextSearchWorker(
+            self._document._backend,
+            search_text,
+            self._document.get_current_page(),
+            self._search_panel.is_case_sensitive()
+        )
+        
+        # Connect signals
+        self._search_worker.search_progress.connect(self._on_search_progress)
+        self._search_worker.match_found.connect(self._on_match_found)
+        self._search_worker.search_completed.connect(self._on_search_completed)
+        self._search_worker.search_failed.connect(self._on_search_failed)
+        self._search_worker.search_cancelled.connect(self._on_search_cancelled)
+        
+        # Show progress and start search
+        self._search_panel.show_progress(True)
+        self._search_panel.set_progress(0, 100)
+        self._search_panel.set_match_counter("Searching...")
+        self._status_bar.showMessage(f"Searching for '{search_text}'...")
+        
+        # Start search in background
+        self._search_worker.start()
+    
+    def _on_search_progress(self, current_page: int, total_pages: int) -> None:
+        """
+        Handle search progress updates.
+        
+        Args:
+            current_page: Current page being searched (1-indexed for display)
+            total_pages: Total number of pages
+        """
+        self._search_panel.set_progress(current_page, total_pages)
+    
+    def _on_match_found(self, page_number: int, matches: list) -> None:
+        """
+        Handle matches found on a page during search.
+        
+        Args:
+            page_number: Page number where matches were found (0-indexed)
+            matches: List of QRectF objects for match locations
+        """
+        # Add results to manager
+        self._search_results.add_page_results(page_number, matches)
+        
+        # Update match counter
+        total_matches = self._search_results.get_total_matches()
+        self._search_panel.set_match_counter(f"{total_matches} match{'es' if total_matches != 1 else ''}")
+        
+        # If this is the first match, jump to it and show highlights
+        if total_matches == 1:
+            self._update_search_highlights()
+            self._jump_to_current_match()
+            self._update_results_list()
+    
+    def _on_search_completed(self, total_matches: int) -> None:
+        """
+        Handle search completion.
+        
+        Args:
+            total_matches: Total number of matches found
+        """
+        # Hide progress
+        self._search_panel.show_progress(False)
+        
+        # Update UI based on results
+        if total_matches > 0:
+            self._search_panel.set_match_counter(f"{total_matches} match{'es' if total_matches != 1 else ''}")
+            self._search_panel.enable_navigation(True)
+            self._status_bar.showMessage(f"Found {total_matches} match{'es' if total_matches != 1 else ''}")
+            
+            # Update results list and highlights
+            self._update_search_highlights()
+            self._update_results_list()
+        else:
+            self._search_panel.set_match_counter("No matches found")
+            self._search_panel.enable_navigation(False)
+            self._status_bar.showMessage("No matches found")
+            self._search_panel.clear_results()
+    
+    def _on_search_failed(self, error_message: str) -> None:
+        """
+        Handle search failure.
+        
+        Args:
+            error_message: Error description
+        """
+        self._search_panel.show_progress(False)
+        self._search_panel.set_match_counter("Search failed")
+        self._status_bar.showMessage(f"Search failed: {error_message}")
+    
+    def _on_search_cancelled(self) -> None:
+        """Handle search cancellation."""
+        self._search_panel.show_progress(False)
+        
+        # Show results found so far
+        total_matches = self._search_results.get_total_matches()
+        if total_matches > 0:
+            self._search_panel.set_match_counter(f"{total_matches} match{'es' if total_matches != 1 else ''} (partial)")
+            self._search_panel.enable_navigation(True)
+            self._update_search_highlights()
+            self._update_results_list()
+        else:
+            self._search_panel.set_match_counter("Search cancelled")
+        
+        self._status_bar.showMessage("Search cancelled")
+    
+    def _find_next(self) -> None:
+        """Navigate to the next search match."""
+        if not self._search_results.has_results():
+            return
+        
+        match_info = self._search_results.go_to_next_match()
+        if match_info:
+            self._update_search_highlights()
+            self._jump_to_current_match()
+            
+            # Update match counter with current position
+            page_num, rect, match_num = match_info
+            total = self._search_results.get_total_matches()
+            self._search_panel.set_match_counter(f"{match_num} of {total}")
+            self._update_results_list()
+    
+    def _find_previous(self) -> None:
+        """Navigate to the previous search match."""
+        if not self._search_results.has_results():
+            return
+        
+        match_info = self._search_results.go_to_previous_match()
+        if match_info:
+            self._update_search_highlights()
+            self._jump_to_current_match()
+            
+            # Update match counter with current position
+            page_num, rect, match_num = match_info
+            total = self._search_results.get_total_matches()
+            self._search_panel.set_match_counter(f"{match_num} of {total}")
+            self._update_results_list()
+    
+    def _update_search_highlights(self) -> None:
+        """Update search highlights on the canvas."""
+        if not self._search_results.has_results():
+            return
+        
+        # Get current match info
+        current_match = None
+        match_info = self._search_results.get_current_match_info()
+        if match_info:
+            page_num, rect, _ = match_info
+            current_match = (page_num, rect)
+        
+        # Build highlights dictionary
+        highlights = {}
+        for page_num in self._search_results.get_pages_with_matches():
+            highlights[page_num] = self._search_results.get_page_results(page_num)
+        
+        # Update canvas with highlights
+        zoom_level = self._document.get_zoom_level()
+        self._canvas.set_search_highlights(highlights, current_match, zoom_level)
+    
+    def _update_results_list(self) -> None:
+        """Update the search results list in the search panel."""
+        if not self._search_results.has_results():
+            return
+        
+        # Get current match info
+        current_match_info = None
+        match_info = self._search_results.get_current_match_info()
+        if match_info:
+            page_num, rect, _ = match_info
+            # Find the match index on this page
+            page_results = self._search_results.get_page_results(page_num)
+            match_idx = page_results.index(rect) if rect in page_results else 0
+            current_match_info = (page_num, match_idx)
+        
+        # Build results list with context
+        results_with_context = []
+        for page_num in self._search_results.get_pages_with_matches():
+            page_results = self._search_results.get_page_results(page_num)
+            # Get page text for context
+            page_text = self._document._backend.get_page_text(page_num)
+            
+            for idx, rect in enumerate(page_results):
+                # Extract context around the match (simplified - just show page number)
+                # In a real implementation, we'd extract text around the rect coordinates
+                context = f"Match on page {page_num + 1}"
+                if page_text:
+                    # Simple context extraction (first 50 chars of page text)
+                    context = page_text[:50].replace('\n', ' ').strip() + "..."
+                
+                results_with_context.append((page_num, idx, context))
+        
+        # Update the results list
+        self._search_panel.update_results_list(results_with_context, current_match_info)
+    
+    def _update_match_counter(self) -> None:
+        """Update the match counter display."""
+        if not self._search_results.has_results():
+            self._search_panel.set_match_counter("No matches")
+            return
+        
+        match_info = self._search_results.get_current_match_info()
+        if match_info:
+            _, _, match_num = match_info
+            total = self._search_results.get_total_matches()
+            self._search_panel.set_match_counter(f"{match_num} of {total}")
+    
+    def _jump_to_current_match(self) -> None:
+        """Scroll to and highlight the current search match."""
+        match_info = self._search_results.get_current_match_info()
+        if not match_info:
+            return
+        
+        page_num, rect, _ = match_info
+        
+        # Navigate to the page containing the match
+        if self._document.set_current_page(page_num):
+            self._canvas.scroll_to_page(page_num)
+            self._update_navigation_controls()
+    
     def closeEvent(self, event) -> None:
         """
         Handle window close event.
@@ -858,5 +1266,9 @@ class MainWindow(QMainWindow):
         if self._zoom_worker and self._zoom_worker.isRunning():
             self._zoom_worker.cancel()
             self._zoom_worker.wait()
+        
+        if self._search_worker and self._search_worker.isRunning():
+            self._search_worker.cancel()
+            self._search_worker.wait()
         
         event.accept()

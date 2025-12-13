@@ -43,3 +43,7 @@ LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
 
 # Page count threshold for threaded zoom rendering
 LARGE_DOCUMENT_PAGE_THRESHOLD = 10
+
+# Search debounce delay in milliseconds
+# Prevents starting search on every keystroke
+SEARCH_DEBOUNCE_DELAY = 300

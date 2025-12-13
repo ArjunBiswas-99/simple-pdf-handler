@@ -15,8 +15,9 @@ GNU General Public License for more details.
 """
 
 import fitz
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtCore import QRectF
 
 
 class PyMuPDFBackend:
@@ -153,4 +154,90 @@ class PyMuPDFBackend:
             return (rect.width, rect.height)
         except Exception as e:
             print(f"Error getting page size: {e}")
+            return None
+    
+    def search_text_in_page(
+        self, 
+        page_number: int, 
+        search_text: str, 
+        case_sensitive: bool = False
+    ) -> List[QRectF]:
+        """
+        Search for text in a specific page and return bounding rectangles.
+        
+        Args:
+            page_number: Page number to search (0-indexed)
+            search_text: Text to search for
+            case_sensitive: Whether to perform case-sensitive search
+            
+        Returns:
+            List of QRectF objects representing text match locations,
+            or empty list if no matches found or page doesn't exist
+        """
+        if not self._document:
+            return []
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return []
+        
+        if not search_text:
+            return []
+        
+        try:
+            page = self._document[page_number]
+            
+            # PyMuPDF search flags
+            # TEXT_PRESERVE_WHITESPACE: Preserve whitespace in text extraction
+            # TEXT_PRESERVE_LIGATURES: Handle ligatures correctly
+            flags = fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_LIGATURES
+            
+            # Perform text search
+            # search_for returns list of Rect objects for each match
+            search_results = page.search_for(search_text, flags=flags)
+            
+            # If case-insensitive search needed and no results, try again
+            # PyMuPDF's search_for is case-sensitive by default
+            if not case_sensitive and not search_results:
+                # Try lowercase version
+                search_results = page.search_for(search_text.lower(), flags=flags)
+                if not search_results:
+                    # Try uppercase version
+                    search_results = page.search_for(search_text.upper(), flags=flags)
+            
+            # Convert fitz.Rect objects to QRectF for Qt compatibility
+            qt_rects = []
+            for rect in search_results:
+                # fitz.Rect has x0, y0, x1, y1 coordinates
+                qrect = QRectF(rect.x0, rect.y0, rect.width, rect.height)
+                qt_rects.append(qrect)
+            
+            return qt_rects
+            
+        except Exception as e:
+            print(f"Error searching text on page {page_number}: {e}")
+            return []
+    
+    def get_page_text(self, page_number: int) -> Optional[str]:
+        """
+        Extract all text from a specific page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            Extracted text as string, or None if extraction fails
+        """
+        if not self._document:
+            return None
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return None
+        
+        try:
+            page = self._document[page_number]
+            # Extract text with preserved layout
+            text = page.get_text("text")
+            return text
+        except Exception as e:
+            print(f"Error extracting text from page {page_number}: {e}")
             return None
