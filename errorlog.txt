@@ -1,6 +1,86 @@
-\simple-pdf-handler> python src/main.py  
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(61.5, 134.25)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(207.5, 147.0)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(37.25, 137.75)
-[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(101.5, 99.0)
+dler> python src/main.py
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(233.0, 180.0)
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(233.0, 180.0)
+[DEBUG] _select_word_at_point called for page 2
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(228.0, 175.0, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(233.0, 180.0)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Has word selection, checking for extension...
+[DEBUG] Extending selection from PyQt6.QtCore.QPointF(233.0, 180.0) to PyQt6.QtCore.QPointF(195.0, 181.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(49.0, 303.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(33.0, 290.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(109.0, 334.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(32.0, 297.0)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(316.0, 301.0)
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(316.0, 301.0)
+[DEBUG] _select_word_at_point called for page 2
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(311.0, 296.0, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(316.0, 301.0)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 2 at PyQt6.QtCore.QPointF(305.0, 304.0)
+[DEBUG] _select_word_at_point called for page 2
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(300.0, 299.0, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(305.0, 304.0)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(82.96105824665851, 272.376571765578)
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(113.0, 371.0)
+[DEBUG] _select_word_at_point called for page 1
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(77.96105824665851, 267.376571765578, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(82.96105824665851, 272.376571765578)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(85.0, 342.0)
+[DEBUG] _select_word_at_point called for page 1
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(57.404335849256405, 246.08568071112578, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(62.404335849256405, 251.08568071112578)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(86.0, 355.0)
+[DEBUG] _select_word_at_point called for page 1
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(58.13850450630648, 255.62987325277675, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(63.13850450630648, 260.62987325277675)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(87.0, 355.0)
+[DEBUG] _select_word_at_point called for page 1
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(58.87267316335655, 255.62987325277675, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(63.87267316335655, 260.62987325277675)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Double-click detected! Button: MouseButton.LeftButton, Selection enabled: True
+[DEBUG] Double-click on page 1 at PyQt6.QtCore.QPointF(125.0, 365.0)
+[DEBUG] _select_word_at_point called for page 1
+[DEBUG] Created selection rect: PyQt6.QtCore.QRectF(86.77108213125942, 262.9715598232775, 10.0, 10.0)
+[DEBUG] _on_text_selected called with: WORD_SELECTION_REQUEST
+[DEBUG] Processing word selection request
+[DEBUG] Updated page label with selection
+[DEBUG] Word selection attempted at PDF point PyQt6.QtCore.QPointF(91.77108213125942, 267.9715598232775)
+[DEBUG] Skipping mousePressEvent after double-click
+[DEBUG] Has word selection, checking for extension...
+[DEBUG] Extending selection from PyQt6.QtCore.QPointF(91.77108213125942, 267.9715598232775) to PyQt6.QtCore.QPointF(61.67016719220633, 251.08568071112578)
+[DEBUG] Starting new selection at PyQt6.QtCore.QPointF(34.50592688135354, 248.14900608292547)
 PS C:\Users\arjun\OneDrive\Desktop\Test\simple-pdf-handler> 
