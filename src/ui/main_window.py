@@ -913,7 +913,8 @@ class MainWindow(QMainWindow):
     
     def _render_zoom_async(self, current_page: int, zoom: float) -> None:
         """
-        Render all pages at new zoom level asynchronously using background thread.
+        Render pages at new zoom level asynchronously.
+        For very large documents, uses lazy rendering even in async mode.
         
         Args:
             current_page: Page number to scroll back to after rendering
@@ -921,6 +922,13 @@ class MainWindow(QMainWindow):
         """
         page_count = self._document.get_page_count()
         
+        # For very large documents, skip progress dialog and use lazy rendering
+        if page_count > 200:
+            # Use synchronous lazy rendering - it's fast enough
+            self._render_zoom_sync(current_page, zoom)
+            return
+        
+        # For moderately large documents (100-200 pages), use threaded rendering
         # Create zoom render worker
         self._zoom_worker = ZoomRenderWorker(
             self._document._backend,
@@ -1324,37 +1332,53 @@ class MainWindow(QMainWindow):
     
     def _copy_selected_text(self) -> None:
         """Copy currently selected text to clipboard."""
+        print("\n[COPY DEBUG] _copy_selected_text called")
+        
         if not self._document.is_open():
+            print("[COPY DEBUG] No document open")
             return
         
         # Get selection info from canvas
         selection_info = self._canvas.get_selection_info()
         if not selection_info:
+            print("[COPY DEBUG] No selection info from canvas")
             return
         
         page_num, selection_rect = selection_info
+        print(f"[COPY DEBUG] Selection on page {page_num}, rect: {selection_rect}")
+        print(f"[COPY DEBUG] Rect dimensions: width={selection_rect.width():.2f}, height={selection_rect.height():.2f}")
         
         # Get text words from the selected page
         words = self._document._backend.get_text_words(page_num)
         if not words:
+            print("[COPY DEBUG] No words on page")
             return
+        
+        print(f"[COPY DEBUG] Got {len(words)} words from page")
         
         # Check if selection rect is small (indicates smart selection from double/triple click)
         # vs large (indicates drag selection)
         is_smart_selection = (selection_rect.width() <= 10 and selection_rect.height() <= 10)
+        print(f"[COPY DEBUG] Is smart selection: {is_smart_selection}")
         
         if is_smart_selection:
             # Smart selection (double or triple click) - determine which by checking line
+            print("[COPY DEBUG] Using smart selection path (word/line)")
             # First try word selection
             word_text = self._select_word_at_rect(words, selection_rect, page_num)
             if word_text:
+                print(f"[COPY DEBUG] Selected word: '{word_text}'")
                 selected_text = word_text
             else:
                 # If no word found, try line selection
+                print("[COPY DEBUG] No word found, trying line selection")
                 selected_text = self._select_line_at_rect(words, selection_rect, page_num)
         else:
             # Normal drag selection
+            print("[COPY DEBUG] Using drag selection path")
             selected_text = self._extract_text_from_selection(words, selection_rect)
+        
+        print(f"[COPY DEBUG] Final selected text: '{selected_text}' (len={len(selected_text)})")
         
         if selected_text:
             # Copy to clipboard
@@ -1363,6 +1387,9 @@ class MainWindow(QMainWindow):
             
             # Show feedback
             self._status_bar.showMessage(f"Copied {len(selected_text)} characters to clipboard", 2000)
+            print(f"[COPY DEBUG] Copied to clipboard successfully\n")
+        else:
+            print("[COPY DEBUG] No text selected, nothing copied\n")
     
     def _calculate_avg_char_width(self, words: list) -> float:
         """
