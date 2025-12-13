@@ -8,7 +8,7 @@
 *   **F1.3:** ✅ The application shall support navigation between pages (next, previous, first, last, go to specific page number).
 *   **F1.4:** ✅ The application shall support zooming in and out of the PDF view (e.g., 50%, 75%, 100%, 125%, 150%, 200%, fit width, fit page).
 *   **F1.5:** ✅ The application shall allow users to search for text within the current PDF document.
-*   **F1.6:** ⬜ The application shall allow users to select and copy text from the PDF.
+*   **F1.6:** ✅ The application shall allow users to select and copy text from the PDF.
 *   **F1.7:** ⬜ The application shall allow users to select and copy images from the PDF.
 *   **F1.8:** ⬜ The application shall display existing annotations and comments in the PDF.
 

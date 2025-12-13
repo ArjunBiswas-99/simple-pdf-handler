@@ -4,9 +4,9 @@ Provides scrollable view with continuous page layout.
 """
 
 from PyQt6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRectF
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen
-from typing import List, Dict, Optional
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRectF, QPointF
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QCursor
+from typing import List, Dict, Optional, Tuple
 
 
 class PDFCanvas(QScrollArea):
@@ -17,6 +17,9 @@ class PDFCanvas(QScrollArea):
     
     # Signal emitted when the visible page changes during scrolling
     page_changed = pyqtSignal(int)
+    
+    # Signal emitted when text is selected
+    text_selected = pyqtSignal(str)  # selected_text
     
     def __init__(self, parent=None):
         """
@@ -37,6 +40,15 @@ class PDFCanvas(QScrollArea):
         # Zoom level used for coordinate scaling
         self._zoom_level: float = 1.0
         
+        # Text selection support
+        self._selection_enabled = True
+        self._is_selecting = False
+        self._selection_start: Optional[QPointF] = None
+        self._selection_current: Optional[QPointF] = None
+        self._selection_page: Optional[int] = None
+        self._selection_rect: Optional[QRectF] = None
+        self._selected_text: str = ""
+        
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -45,6 +57,10 @@ class PDFCanvas(QScrollArea):
         self.setWidgetResizable(True)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet("background-color: #525252;")
+        
+        # Enable mouse tracking for cursor changes
+        self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
         
         # Create container widget for pages
         self._container = QWidget()
@@ -93,6 +109,9 @@ class PDFCanvas(QScrollArea):
                 page_label = HighlightableLabel(i)
                 page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 
+                # Enable mouse tracking for this label
+                page_label.setMouseTracking(True)
+                
                 # Apply search highlights if they exist for this page
                 if i in self._search_highlights:
                     page_label.set_highlights(
@@ -100,6 +119,10 @@ class PDFCanvas(QScrollArea):
                         self._current_match,
                         self._zoom_level
                     )
+                
+                # Set selection rectangle if on this page
+                if self._selection_page == i and self._selection_rect:
+                    page_label.set_selection(self._selection_rect, self._zoom_level)
                 
                 page_label.setPixmap(pixmap)
                 page_label.setStyleSheet("background-color: white; border: 1px solid #ccc;")
@@ -263,11 +286,199 @@ class PDFCanvas(QScrollArea):
             if isinstance(label, HighlightableLabel):
                 label.clear_highlights()
                 label.update()
+    
+    def mousePressEvent(self, event) -> None:
+        """
+        Handle mouse press event to start text selection.
+        
+        Args:
+            event: Mouse event
+        """
+        if not self._selection_enabled or event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        
+        # Get which page was clicked
+        page_info = self._get_page_at_position(event.pos())
+        if page_info is None:
+            super().mousePressEvent(event)
+            return
+        
+        page_num, page_label, point_in_page = page_info
+        
+        # Convert to PDF coordinates (accounting for zoom)
+        pdf_point = QPointF(
+            point_in_page.x() / self._zoom_level,
+            point_in_page.y() / self._zoom_level
+        )
+        
+        # Start selection
+        self._is_selecting = True
+        self._selection_start = pdf_point
+        self._selection_current = pdf_point
+        self._selection_page = page_num
+        self._update_selection_rect()
+        
+        # Update display
+        if isinstance(page_label, HighlightableLabel):
+            page_label.set_selection(self._selection_rect, self._zoom_level)
+            page_label.update()
+        
+        event.accept()
+    
+    def mouseMoveEvent(self, event) -> None:
+        """
+        Handle mouse move event to update selection or change cursor.
+        
+        Args:
+            event: Mouse event
+        """
+        # Change cursor when over text
+        page_info = self._get_page_at_position(event.pos())
+        if page_info is not None and self._selection_enabled:
+            self.viewport().setCursor(QCursor(Qt.CursorShape.IBeamCursor))
+        else:
+            self.viewport().setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+        
+        # Update selection if actively selecting
+        if self._is_selecting and page_info is not None:
+            page_num, page_label, point_in_page = page_info
+            
+            # Only continue selection on the same page
+            if page_num == self._selection_page:
+                # Convert to PDF coordinates
+                pdf_point = QPointF(
+                    point_in_page.x() / self._zoom_level,
+                    point_in_page.y() / self._zoom_level
+                )
+                
+                self._selection_current = pdf_point
+                self._update_selection_rect()
+                
+                # Update display
+                if isinstance(page_label, HighlightableLabel):
+                    page_label.set_selection(self._selection_rect, self._zoom_level)
+                    page_label.update()
+            
+            event.accept()
+            return
+        
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event) -> None:
+        """
+        Handle mouse release event to finalize text selection.
+        
+        Args:
+            event: Mouse event
+        """
+        if self._is_selecting and event.button() == Qt.MouseButton.LeftButton:
+            self._is_selecting = False
+            
+            # If selection is too small, clear it
+            if self._selection_rect and (
+                self._selection_rect.width() < 5 or 
+                self._selection_rect.height() < 5
+            ):
+                self.clear_selection()
+            
+            event.accept()
+            return
+        
+        super().mouseReleaseEvent(event)
+    
+    def _get_page_at_position(self, pos) -> Optional[Tuple[int, QLabel, QPointF]]:
+        """
+        Get the page label and relative position for a viewport position.
+        
+        Args:
+            pos: Position in viewport coordinates
+            
+        Returns:
+            Tuple of (page_number, page_label, point_in_page) or None
+        """
+        # Convert viewport position to container position
+        container_pos = self.widget().mapFromParent(pos)
+        
+        # Check each page label
+        for i, label in enumerate(self._page_labels):
+            if not isinstance(label, HighlightableLabel) or not label.pixmap():
+                continue
+            
+            # Check if position is within this label
+            label_rect = label.geometry()
+            if label_rect.contains(container_pos):
+                # Get position relative to label
+                point_in_label = label.mapFrom(self.widget(), container_pos)
+                return (i, label, QPointF(point_in_label))
+        
+        return None
+    
+    def _update_selection_rect(self) -> None:
+        """Update the selection rectangle based on start and current points."""
+        if not self._selection_start or not self._selection_current:
+            self._selection_rect = None
+            return
+        
+        x1 = min(self._selection_start.x(), self._selection_current.x())
+        y1 = min(self._selection_start.y(), self._selection_current.y())
+        x2 = max(self._selection_start.x(), self._selection_current.x())
+        y2 = max(self._selection_start.y(), self._selection_current.y())
+        
+        self._selection_rect = QRectF(x1, y1, x2 - x1, y2 - y1)
+    
+    def get_selection_info(self) -> Optional[Tuple[int, QRectF]]:
+        """
+        Get current selection information.
+        
+        Returns:
+            Tuple of (page_number, selection_rect) or None if no selection
+        """
+        if self._selection_page is not None and self._selection_rect:
+            return (self._selection_page, self._selection_rect)
+        return None
+    
+    def clear_selection(self) -> None:
+        """Clear the current text selection."""
+        self._is_selecting = False
+        self._selection_start = None
+        self._selection_current = None
+        page_to_update = self._selection_page
+        self._selection_page = None
+        self._selection_rect = None
+        self._selected_text = ""
+        
+        # Update the affected page label
+        if page_to_update is not None and 0 <= page_to_update < len(self._page_labels):
+            label = self._page_labels[page_to_update]
+            if isinstance(label, HighlightableLabel):
+                label.clear_selection()
+                label.update()
+    
+    def set_selection_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable text selection.
+        
+        Args:
+            enabled: True to enable selection, False to disable
+        """
+        self._selection_enabled = enabled
+        if not enabled:
+            self.clear_selection()
+    
+    def set_zoom_level(self, zoom_level: float) -> None:
+        """
+        Update the zoom level for coordinate calculations.
+        
+        Args:
+            zoom_level: New zoom level
+        """
+        self._zoom_level = zoom_level
 
 
 class HighlightableLabel(QLabel):
     """
-    Custom QLabel that can display search highlights over PDF pages.
+    Custom QLabel that can display search highlights and text selection over PDF pages.
     Separates highlighting concerns from the main canvas widget.
     """
     
@@ -284,6 +495,7 @@ class HighlightableLabel(QLabel):
         self._highlights: List[QRectF] = []
         self._current_match: Optional[tuple] = None
         self._zoom_level: float = 1.0
+        self._selection_rect: Optional[QRectF] = None
     
     def set_highlights(
         self,
@@ -308,9 +520,24 @@ class HighlightableLabel(QLabel):
         self._highlights.clear()
         self._current_match = None
     
+    def set_selection(self, selection_rect: Optional[QRectF], zoom_level: float) -> None:
+        """
+        Set text selection rectangle to display on this page.
+        
+        Args:
+            selection_rect: Rectangle to show as selection (in PDF coordinates)
+            zoom_level: Zoom level for coordinate scaling
+        """
+        self._selection_rect = selection_rect
+        self._zoom_level = zoom_level
+    
+    def clear_selection(self) -> None:
+        """Clear the text selection from this label."""
+        self._selection_rect = None
+    
     def paintEvent(self, event) -> None:
         """
-        Custom paint event to draw highlights over the PDF page.
+        Custom paint event to draw highlights and selection over the PDF page.
         
         Args:
             event: Paint event
@@ -318,15 +545,15 @@ class HighlightableLabel(QLabel):
         # First, let the parent class paint the pixmap
         super().paintEvent(event)
         
-        # If no highlights, nothing more to do
-        if not self._highlights or not self.pixmap():
+        # If no highlights or selection, nothing more to do
+        if (not self._highlights and not self._selection_rect) or not self.pixmap():
             return
         
-        # Create painter for drawing highlights
+        # Create painter for drawing
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Draw each highlight rectangle
+        # Draw search highlights first (so selection appears on top)
         for rect in self._highlights:
             # Scale rectangle to current zoom level
             scaled_rect = QRectF(
@@ -355,5 +582,19 @@ class HighlightableLabel(QLabel):
             
             # Draw the highlight rectangle
             painter.drawRect(scaled_rect)
+        
+        # Draw text selection on top
+        if self._selection_rect:
+            scaled_selection = QRectF(
+                self._selection_rect.x() * self._zoom_level,
+                self._selection_rect.y() * self._zoom_level,
+                self._selection_rect.width() * self._zoom_level,
+                self._selection_rect.height() * self._zoom_level
+            )
+            
+            # Selection: semi-transparent blue
+            painter.setBrush(QColor(38, 128, 235, 60))  # Professional blue
+            painter.setPen(QPen(QColor(38, 128, 235, 180), 1))
+            painter.drawRect(scaled_selection)
         
         painter.end()

@@ -241,3 +241,86 @@ class PyMuPDFBackend:
         except Exception as e:
             print(f"Error extracting text from page {page_number}: {e}")
             return None
+    
+    def get_text_blocks(self, page_number: int) -> List[Tuple[float, float, float, float, str]]:
+        """
+        Get text blocks with their bounding coordinates from a specific page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            List of tuples (x0, y0, x1, y1, text) where:
+            - x0, y0: top-left corner coordinates
+            - x1, y1: bottom-right corner coordinates
+            - text: the text content of the block
+            Returns empty list if extraction fails or no text found
+        """
+        if not self._document:
+            return []
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return []
+        
+        try:
+            page = self._document[page_number]
+            # Get text blocks with coordinates
+            # Format: (x0, y0, x1, y1, "text", block_no, block_type)
+            # block_type: 0=text, 1=image
+            blocks = page.get_text("blocks")
+            
+            # Filter to only text blocks and extract relevant info
+            text_blocks = []
+            for block in blocks:
+                if len(block) >= 5:  # Ensure block has enough elements
+                    x0, y0, x1, y1, text = block[0], block[1], block[2], block[3], block[4]
+                    # Only include text blocks (not images)
+                    if isinstance(text, str) and text.strip():
+                        text_blocks.append((x0, y0, x1, y1, text.strip()))
+            
+            return text_blocks
+            
+        except Exception as e:
+            print(f"Error extracting text blocks from page {page_number}: {e}")
+            return []
+    
+    def get_text_words(self, page_number: int) -> List[Tuple[float, float, float, float, str]]:
+        """
+        Get individual words with their bounding coordinates from a specific page.
+        Provides finer granularity than get_text_blocks for more precise selection.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            List of tuples (x0, y0, x1, y1, word) where:
+            - x0, y0: top-left corner coordinates
+            - x1, y1: bottom-right corner coordinates
+            - word: the individual word
+            Returns empty list if extraction fails or no text found
+        """
+        if not self._document:
+            return []
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return []
+        
+        try:
+            page = self._document[page_number]
+            # Get words with coordinates
+            # Format: (x0, y0, x1, y1, "word", block_no, line_no, word_no)
+            words = page.get_text("words")
+            
+            # Extract relevant info
+            word_list = []
+            for word in words:
+                if len(word) >= 5:  # Ensure word has enough elements
+                    x0, y0, x1, y1, text = word[0], word[1], word[2], word[3], word[4]
+                    if text.strip():
+                        word_list.append((x0, y0, x1, y1, text))
+            
+            return word_list
+            
+        except Exception as e:
+            print(f"Error extracting words from page {page_number}: {e}")
+            return []

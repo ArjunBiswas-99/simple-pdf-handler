@@ -18,7 +18,7 @@ import os
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QMenuBar, QMenu, QStatusBar,
     QToolBar, QLabel, QLineEdit, QPushButton, QWidget, QHBoxLayout, QComboBox,
-    QSplitter
+    QSplitter, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QKeySequence
@@ -69,6 +69,9 @@ class MainWindow(QMainWindow):
         self._search_panel = None
         self._search_section = None
         
+        # Text selection support
+        self._selection_enabled = True
+        
         self._setup_ui()
         self._update_window_title()
     
@@ -96,6 +99,7 @@ class MainWindow(QMainWindow):
         # Create PDF canvas
         self._canvas = PDFCanvas()
         self._canvas.verticalScrollBar().valueChanged.connect(self._on_scroll)
+        self._canvas.text_selected.connect(self._on_text_selected)
         splitter.addWidget(self._canvas)
         
         # Set splitter properties
@@ -359,6 +363,17 @@ class MainWindow(QMainWindow):
         panel_toggle_shortcut.setShortcut(QKeySequence("Ctrl+B"))
         panel_toggle_shortcut.triggered.connect(self._toggle_left_panel)
         self.addAction(panel_toggle_shortcut)
+        
+        # Text selection shortcuts
+        copy_shortcut = QAction(self)
+        copy_shortcut.setShortcut(QKeySequence("Ctrl+C"))
+        copy_shortcut.triggered.connect(self._copy_selected_text)
+        self.addAction(copy_shortcut)
+        
+        escape_shortcut = QAction(self)
+        escape_shortcut.setShortcut(QKeySequence(Qt.Key.Key_Escape))
+        escape_shortcut.triggered.connect(self._clear_selection)
+        self.addAction(escape_shortcut)
     
     def _toggle_left_panel(self) -> None:
         """Toggle the visibility of the left side panel."""
@@ -492,6 +507,9 @@ class MainWindow(QMainWindow):
         # Reset zoom to 100%
         self._document.set_zoom_level(DEFAULT_ZOOM)
         self._zoom_combo.setCurrentText("100%")
+        
+        # Update canvas zoom level
+        self._canvas.set_zoom_level(DEFAULT_ZOOM)
         
         # Render and display all pages in continuous mode
         self._render_all_pages()
@@ -847,6 +865,9 @@ class MainWindow(QMainWindow):
         """
         self._status_bar.showMessage(f"Applying zoom: {int(zoom * 100)}%...")
         
+        # Update canvas zoom level
+        self._canvas.set_zoom_level(zoom)
+        
         # Re-render all pages
         self._render_all_pages()
         
@@ -899,6 +920,9 @@ class MainWindow(QMainWindow):
         """
         # Close progress dialog
         self._progress_dialog.accept()
+        
+        # Update canvas zoom level
+        self._canvas.set_zoom_level(zoom)
         
         # Display the rendered pages
         self._canvas.display_pages(pixmaps)
@@ -1235,6 +1259,109 @@ class MainWindow(QMainWindow):
         if self._document.set_current_page(page_num):
             self._canvas.scroll_to_page(page_num)
             self._update_navigation_controls()
+    
+    def _on_text_selected(self, selected_text: str) -> None:
+        """
+        Handle text selection signal from canvas.
+        
+        Args:
+            selected_text: The selected text
+        """
+        # This signal is for future use if needed
+        pass
+    
+    def _copy_selected_text(self) -> None:
+        """Copy currently selected text to clipboard."""
+        if not self._document.is_open():
+            return
+        
+        # Get selection info from canvas
+        selection_info = self._canvas.get_selection_info()
+        if not selection_info:
+            return
+        
+        page_num, selection_rect = selection_info
+        
+        # Get text words from the selected page
+        words = self._document._backend.get_text_words(page_num)
+        if not words:
+            return
+        
+        # Extract text from selected words
+        selected_text = self._extract_text_from_selection(words, selection_rect)
+        
+        if selected_text:
+            # Copy to clipboard
+            clipboard = QApplication.clipboard()
+            clipboard.setText(selected_text)
+            
+            # Show feedback
+            self._status_bar.showMessage(f"Copied {len(selected_text)} characters to clipboard", 2000)
+    
+    def _extract_text_from_selection(self, words: list, selection_rect) -> str:
+        """
+        Extract text from words that intersect with selection rectangle.
+        
+        Args:
+            words: List of (x0, y0, x1, y1, word_text) tuples
+            selection_rect: Selection rectangle in PDF coordinates
+            
+        Returns:
+            Extracted text string
+        """
+        if not words or not selection_rect:
+            return ""
+        
+        # Find words that intersect with selection
+        selected_words = []
+        for x0, y0, x1, y1, text in words:
+            # Check if word intersects with selection
+            word_left = x0
+            word_right = x1
+            word_top = y0
+            word_bottom = y1
+            
+            sel_left = selection_rect.left()
+            sel_right = selection_rect.right()
+            sel_top = selection_rect.top()
+            sel_bottom = selection_rect.bottom()
+            
+            # Check intersection
+            if (word_left < sel_right and word_right > sel_left and
+                word_top < sel_bottom and word_bottom > sel_top):
+                selected_words.append((x0, y0, x1, y1, text))
+        
+        if not selected_words:
+            return ""
+        
+        # Sort words by position (top-to-bottom, left-to-right)
+        selected_words.sort(key=lambda w: (w[1], w[0]))  # Sort by y0, then x0
+        
+        # Combine words into text with appropriate spacing
+        text_parts = []
+        prev_y = None
+        prev_x = None
+        
+        for x0, y0, x1, y1, word in selected_words:
+            # If we're on a new line (y coordinate changed significantly)
+            if prev_y is not None and abs(y0 - prev_y) > 5:  # 5 points threshold
+                text_parts.append('\n')
+            # If same line but gap between words
+            elif prev_x is not None and prev_y is not None:
+                # Check if there's a gap between words
+                if x0 - prev_x > 5:  # 5 points threshold for word spacing
+                    text_parts.append(' ')
+            
+            text_parts.append(word)
+            prev_y = y0
+            prev_x = x1
+        
+        return ''.join(text_parts)
+    
+    def _clear_selection(self) -> None:
+        """Clear the current text selection."""
+        self._canvas.clear_selection()
+        self._status_bar.showMessage("Selection cleared", 1000)
     
     def closeEvent(self, event) -> None:
         """
