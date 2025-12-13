@@ -174,9 +174,31 @@ python src/main.py
 
 This is a personal project by Arjun Biswas. Future enhancements will implement the complete feature set outlined in Requirements.md.
 
+Contributions, bug reports, and feature requests are welcome! Please feel free to open issues or submit pull requests.
+
 ## License
 
-This project is for educational and personal use.
+This program is free software licensed under the **GNU General Public License v3.0**.
+
+You are free to:
+- ✅ Use this software for any purpose (personal, educational, commercial)
+- ✅ Study and modify the source code
+- ✅ Distribute copies of the software
+- ✅ Distribute modified versions
+
+**Conditions:**
+- If you distribute this software or modified versions, you must:
+  - Provide the source code
+  - License your work under GPL v3
+  - Include copyright and license notices
+
+**Dependencies:**
+- PyQt6 (GPL v3) - Copyright (C) Riverbank Computing Limited
+- PyMuPDF/fitz (AGPL v3) - Copyright (C) Artifex Software, Inc.
+
+For the complete license text, see the [LICENSE](LICENSE) file.
+
+For more information about GPL v3: https://www.gnu.org/licenses/gpl-3.0.html
 
 ## Version History
 
