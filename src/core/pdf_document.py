@@ -17,6 +17,7 @@ GNU General Public License for more details.
 from typing import Optional, Tuple
 from PyQt6.QtGui import QPixmap
 from backend.pymupdf_backend import PyMuPDFBackend
+from utils.constants import ViewMode
 
 
 class PDFDocument:
@@ -30,6 +31,7 @@ class PDFDocument:
         self._backend = PyMuPDFBackend()
         self._current_page: int = 0
         self._zoom_level: float = 1.0
+        self._view_mode: ViewMode = ViewMode.CONTINUOUS
     
     def open(self, file_path: str) -> bool:
         """
@@ -45,6 +47,7 @@ class PDFDocument:
         if success:
             self._current_page = 0
             self._zoom_level = 1.0
+            self._view_mode = ViewMode.CONTINUOUS
         return success
     
     def close(self) -> None:
@@ -52,6 +55,7 @@ class PDFDocument:
         self._backend.close()
         self._current_page = 0
         self._zoom_level = 1.0
+        self._view_mode = ViewMode.CONTINUOUS
     
     def is_open(self) -> bool:
         """
@@ -157,3 +161,21 @@ class PDFDocument:
             File path string, or None if no document is open
         """
         return self._backend.get_file_path()
+    
+    def get_view_mode(self) -> ViewMode:
+        """
+        Get the current view mode.
+        
+        Returns:
+            Current ViewMode enum value
+        """
+        return self._view_mode
+    
+    def set_view_mode(self, mode: ViewMode) -> None:
+        """
+        Set the view mode for displaying pages.
+        
+        Args:
+            mode: ViewMode enum value (CONTINUOUS, SINGLE_PAGE, or FACING)
+        """
+        self._view_mode = mode

@@ -143,19 +143,35 @@ class PDFCanvas(QScrollArea):
                 self._container_layout.addWidget(page_label)
                 self._page_labels.append(page_label)
     
-    def display_single_page(self, pixmap: QPixmap) -> None:
+    def display_single_page(self, pixmap: QPixmap, page_number: int = 0) -> None:
         """
         Display a single PDF page (for single page mode).
         
         Args:
             pixmap: QPixmap containing the rendered page
+            page_number: Page number being displayed (for highlights/selection)
         """
         # Clear existing pages
         self._clear_pages()
         
         if pixmap and not pixmap.isNull():
-            page_label = QLabel()
+            # Use HighlightableLabel to support search and selection
+            page_label = HighlightableLabel(page_number)
             page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            page_label.setMouseTracking(True)
+            
+            # Apply search highlights if they exist for this page
+            if page_number in self._search_highlights:
+                page_label.set_highlights(
+                    self._search_highlights[page_number],
+                    self._current_match,
+                    self._zoom_level
+                )
+            
+            # Set selection rectangle if on this page
+            if self._selection_page == page_number and self._selection_rect:
+                page_label.set_selection(self._selection_rect, self._zoom_level)
+            
             page_label.setPixmap(pixmap)
             page_label.setStyleSheet("background-color: white; border: 1px solid #ccc;")
             page_label.setScaledContents(False)
@@ -164,6 +180,73 @@ class PDFCanvas(QScrollArea):
             self._page_labels = [page_label]
         else:
             self._show_error("Failed to render page")
+    
+    def display_facing_pages(self, left_pixmap: Optional[QPixmap], right_pixmap: Optional[QPixmap],
+                            left_page_num: int, right_page_num: Optional[int] = None) -> None:
+        """
+        Display two pages side-by-side (for facing pages mode).
+        
+        Args:
+            left_pixmap: QPixmap for left page
+            right_pixmap: QPixmap for right page (None for single page like cover)
+            left_page_num: Page number for left page
+            right_page_num: Page number for right page (None if no right page)
+        """
+        # Clear existing pages
+        self._clear_pages()
+        
+        # Create horizontal layout for facing pages
+        from PyQt6.QtWidgets import QHBoxLayout
+        facing_container = QWidget()
+        facing_layout = QHBoxLayout(facing_container)
+        facing_layout.setSpacing(20)  # Gap between pages
+        facing_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add left page
+        if left_pixmap and not left_pixmap.isNull():
+            left_label = HighlightableLabel(left_page_num)
+            left_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            left_label.setMouseTracking(True)
+            
+            # Apply highlights and selection
+            if left_page_num in self._search_highlights:
+                left_label.set_highlights(
+                    self._search_highlights[left_page_num],
+                    self._current_match,
+                    self._zoom_level
+                )
+            if self._selection_page == left_page_num and self._selection_rect:
+                left_label.set_selection(self._selection_rect, self._zoom_level)
+            
+            left_label.setPixmap(left_pixmap)
+            left_label.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            left_label.setScaledContents(False)
+            facing_layout.addWidget(left_label)
+            self._page_labels.append(left_label)
+        
+        # Add right page
+        if right_pixmap and not right_pixmap.isNull() and right_page_num is not None:
+            right_label = HighlightableLabel(right_page_num)
+            right_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            right_label.setMouseTracking(True)
+            
+            # Apply highlights and selection
+            if right_page_num in self._search_highlights:
+                right_label.set_highlights(
+                    self._search_highlights[right_page_num],
+                    self._current_match,
+                    self._zoom_level
+                )
+            if self._selection_page == right_page_num and self._selection_rect:
+                right_label.set_selection(self._selection_rect, self._zoom_level)
+            
+            right_label.setPixmap(right_pixmap)
+            right_label.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            right_label.setScaledContents(False)
+            facing_layout.addWidget(right_label)
+            self._page_labels.append(right_label)
+        
+        self._container_layout.addWidget(facing_container)
     
     def _show_error(self, message: str) -> None:
         """

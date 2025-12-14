@@ -280,20 +280,18 @@ class ViewToolbar(QWidget):
     
     def _create_navigation_group(self, layout: QHBoxLayout) -> None:
         """Create navigation controls."""
-        # First page button - clean icon
-        self._first_page_btn = QPushButton("⟪")
+        # First page button - text label
+        self._first_page_btn = QPushButton("First")
         self._first_page_btn.setToolTip("Go to first page (Home)")
         self._first_page_btn.setEnabled(False)
-        self._first_page_btn.setFixedWidth(40)
         self._first_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._first_page_btn.clicked.connect(self.first_page.emit)
         layout.addWidget(self._first_page_btn)
         
-        # Previous page button - clean icon
-        self._prev_page_btn = QPushButton("◀")
+        # Previous page button - text label
+        self._prev_page_btn = QPushButton("Previous")
         self._prev_page_btn.setToolTip("Previous page (←)")
         self._prev_page_btn.setEnabled(False)
-        self._prev_page_btn.setFixedWidth(40)
         self._prev_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._prev_page_btn.clicked.connect(self.previous_page.emit)
         layout.addWidget(self._prev_page_btn)
@@ -312,49 +310,44 @@ class ViewToolbar(QWidget):
         self._page_count_label.setStyleSheet("color: #646464; padding: 0 4px;")
         layout.addWidget(self._page_count_label)
         
-        # Next page button - clean icon
-        self._next_page_btn = QPushButton("▶")
+        # Next page button - text label
+        self._next_page_btn = QPushButton("Next")
         self._next_page_btn.setToolTip("Next page (→)")
         self._next_page_btn.setEnabled(False)
-        self._next_page_btn.setFixedWidth(40)
         self._next_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._next_page_btn.clicked.connect(self.next_page.emit)
         layout.addWidget(self._next_page_btn)
         
-        # Last page button - clean icon
-        self._last_page_btn = QPushButton("⟫")
+        # Last page button - text label
+        self._last_page_btn = QPushButton("Last")
         self._last_page_btn.setToolTip("Go to last page (End)")
         self._last_page_btn.setEnabled(False)
-        self._last_page_btn.setFixedWidth(40)
         self._last_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._last_page_btn.clicked.connect(self.last_page.emit)
         layout.addWidget(self._last_page_btn)
     
     def _create_zoom_group(self, layout: QHBoxLayout) -> None:
         """Create zoom controls."""
-        # Fit Page button - icon symbol
-        self._fit_page_btn = QPushButton("⬜")
+        # Fit Page button - text label
+        self._fit_page_btn = QPushButton("Fit Page")
         self._fit_page_btn.setToolTip("Fit entire page to window")
         self._fit_page_btn.setEnabled(False)
-        self._fit_page_btn.setFixedWidth(40)
         self._fit_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._fit_page_btn.clicked.connect(self.fit_page.emit)
         layout.addWidget(self._fit_page_btn)
         
-        # Fit Width button - icon symbol
-        self._fit_width_btn = QPushButton("↔")
+        # Fit Width button - text label
+        self._fit_width_btn = QPushButton("Fit Width")
         self._fit_width_btn.setToolTip("Fit page width to window")
         self._fit_width_btn.setEnabled(False)
-        self._fit_width_btn.setFixedWidth(40)
         self._fit_width_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._fit_width_btn.clicked.connect(self.fit_width.emit)
         layout.addWidget(self._fit_width_btn)
         
-        # Zoom out button - icon symbol
-        self._zoom_out_btn = QPushButton("−")
+        # Zoom out button - symbol with label
+        self._zoom_out_btn = QPushButton("− Zoom Out")
         self._zoom_out_btn.setToolTip("Decrease zoom level")
         self._zoom_out_btn.setEnabled(False)
-        self._zoom_out_btn.setFixedWidth(40)
         self._zoom_out_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._zoom_out_btn.clicked.connect(self.zoom_out.emit)
         layout.addWidget(self._zoom_out_btn)
@@ -370,36 +363,41 @@ class ViewToolbar(QWidget):
         self._zoom_combo.currentTextChanged.connect(self.zoom_changed.emit)
         layout.addWidget(self._zoom_combo)
         
-        # Zoom in button - icon symbol
-        self._zoom_in_btn = QPushButton("+")
+        # Zoom in button - symbol with label
+        self._zoom_in_btn = QPushButton("+ Zoom In")
         self._zoom_in_btn.setToolTip("Increase zoom level")
         self._zoom_in_btn.setEnabled(False)
-        self._zoom_in_btn.setFixedWidth(40)
         self._zoom_in_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._zoom_in_btn.clicked.connect(self.zoom_in.emit)
         layout.addWidget(self._zoom_in_btn)
     
     def _create_layout_group(self, layout: QHBoxLayout) -> None:
         """Create layout mode buttons."""
-        # Single page button (grayed out)
+        # Single page button
         self._single_page_btn = QPushButton("Single")
-        self._single_page_btn.setToolTip("Single page view (Coming soon)")
-        self._single_page_btn.setEnabled(False)
+        self._single_page_btn.setToolTip("Single page view - one page at a time")
+        self._single_page_btn.setCheckable(True)
+        self._single_page_btn.setEnabled(False)  # Enabled when document loads
+        self._single_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._single_page_btn.clicked.connect(self.single_page.emit)
         layout.addWidget(self._single_page_btn)
         
-        # Continuous page button (active)
+        # Continuous page button (default active)
         self._continuous_page_btn = QPushButton("Continuous")
-        self._continuous_page_btn.setToolTip("Continuous scrolling view (Active)")
+        self._continuous_page_btn.setToolTip("Continuous scrolling view")
         self._continuous_page_btn.setCheckable(True)
         self._continuous_page_btn.setChecked(True)
+        self._continuous_page_btn.setEnabled(False)  # Enabled when document loads
+        self._continuous_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._continuous_page_btn.clicked.connect(self.continuous_page.emit)
         layout.addWidget(self._continuous_page_btn)
         
-        # Facing page button (grayed out)
+        # Facing page button
         self._facing_page_btn = QPushButton("Facing")
-        self._facing_page_btn.setToolTip("Facing pages view (Coming soon)")
-        self._facing_page_btn.setEnabled(False)
+        self._facing_page_btn.setToolTip("Facing pages view - two pages side-by-side")
+        self._facing_page_btn.setCheckable(True)
+        self._facing_page_btn.setEnabled(False)  # Enabled when document loads
+        self._facing_page_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._facing_page_btn.clicked.connect(self.facing_page.emit)
         layout.addWidget(self._facing_page_btn)
     
@@ -502,3 +500,9 @@ class ViewToolbar(QWidget):
         self._zoom_combo.setEnabled(enabled)
         self._fit_width_btn.setEnabled(enabled)
         self._fit_page_btn.setEnabled(enabled)
+    
+    def set_layout_mode_enabled(self, enabled: bool) -> None:
+        """Enable or disable layout mode buttons."""
+        self._single_page_btn.setEnabled(enabled)
+        self._continuous_page_btn.setEnabled(enabled)
+        self._facing_page_btn.setEnabled(enabled)

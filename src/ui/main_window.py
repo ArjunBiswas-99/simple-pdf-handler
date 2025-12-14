@@ -50,7 +50,7 @@ from ui.styles.enhanced_styles import EnhancedStyles
 from utils.constants import (
     ZOOM_LEVELS, ZOOM_LEVEL_LABELS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM,
     ZOOM_INCREMENT, LARGE_FILE_THRESHOLD, LARGE_DOCUMENT_PAGE_THRESHOLD,
-    SEARCH_DEBOUNCE_DELAY
+    SEARCH_DEBOUNCE_DELAY, ViewMode
 )
 from utils.settings_manager import get_settings_manager
 
@@ -262,6 +262,7 @@ class MainWindow(QMainWindow):
             self._view_toolbar.set_navigation_enabled(False)
             self._view_toolbar.set_navigation_buttons_state(False, False)
             self._view_toolbar.set_zoom_enabled(False)
+            self._view_toolbar.set_layout_mode_enabled(False)
             self._view_toolbar.set_page_info(0, 0)
             return
         
@@ -281,6 +282,9 @@ class MainWindow(QMainWindow):
         
         # Enable zoom controls
         self._view_toolbar.set_zoom_enabled(True)
+        
+        # Enable layout mode buttons
+        self._view_toolbar.set_layout_mode_enabled(True)
         
         # Update zoom display
         zoom = self._document.get_zoom_level()
@@ -306,6 +310,11 @@ class MainWindow(QMainWindow):
         
         # Connect bookmarks panel signals
         bookmarks_panel.bookmark_clicked.connect(self._on_bookmark_clicked)
+        
+        # Connect layout mode signals from toolbar
+        self._view_toolbar.single_page.connect(self._set_single_page_mode)
+        self._view_toolbar.continuous_page.connect(self._set_continuous_mode)
+        self._view_toolbar.facing_page.connect(self._set_facing_pages_mode)
         
         # Store references to panels for updates
         self._pages_panel = pages_panel
@@ -665,9 +674,15 @@ class MainWindow(QMainWindow):
             current = self._document.get_current_page()
             self._page_input.setText(str(current + 1))
     
-    def _render_all_pages(self) -> None:
-        """Render and display all pages in continuous scrolling mode."""
+    def _render_all_pages(self, preserve_page: bool = False) -> None:
+        """
+        Render and display all pages in continuous scrolling mode.
+        
+        Args:
+            preserve_page: If True, scroll to current page instead of first page
+        """
         page_count = self._document.get_page_count()
+        current_page = self._document.get_current_page() if preserve_page else 0
         pixmaps = []
         
         self._status_bar.showMessage(f"Rendering {page_count} pages...")
@@ -684,35 +699,41 @@ class MainWindow(QMainWindow):
         # Display all pages in continuous layout
         self._canvas.display_pages(pixmaps)
         
-        # Scroll to first page
-        self._canvas.scroll_to_page(0)
+        # Scroll to appropriate page
+        self._canvas.scroll_to_page(current_page)
     
-    def _render_initial_pages_lazy(self) -> None:
+    def _render_initial_pages_lazy(self, preserve_page: bool = False) -> None:
         """
         Render initial pages lazily for large documents to avoid UI freeze.
         Only renders first 20 pages, creates placeholders for rest.
+        
+        Args:
+            preserve_page: If True, render around current page instead of starting from 0
         """
         page_count = self._document.get_page_count()
         zoom = self._document.get_zoom_level()
+        current_page = self._document.get_current_page() if preserve_page else 0
         
-        # Render first 20 pages only
-        initial_render_count = min(20, page_count)
+        # Render pages around current page (current ± 10 pages)
+        window_size = 10
+        render_start = max(0, current_page - window_size)
+        render_end = min(page_count, current_page + window_size + 1)
         
-        self._status_bar.showMessage(f"Rendering initial {initial_render_count} of {page_count} pages...")
+        self._status_bar.showMessage(f"Rendering pages {render_start+1} to {render_end} of {page_count}...")
         
         # Track rendered pages
         self._rendered_pages.clear()
-        for i in range(initial_render_count):
+        for i in range(render_start, render_end):
             self._rendered_pages.add(i)
         
         pixmaps = []
         for page_num in range(page_count):
-            if page_num < initial_render_count:
-                # Render first pages
+            if render_start <= page_num < render_end:
+                # Render pages in window
                 pixmap = self._document.render_page(page_num)
                 pixmaps.append(pixmap if pixmap else QPixmap())
             else:
-                # Create placeholder for remaining pages
+                # Create placeholder for other pages
                 page_size = self._document.get_page_size(page_num)
                 if page_size:
                     width, height = page_size
@@ -727,8 +748,8 @@ class MainWindow(QMainWindow):
         # Display all pages (with placeholders)
         self._canvas.display_pages(pixmaps)
         
-        # Scroll to first page
-        self._canvas.scroll_to_page(0)
+        # Scroll to current page
+        self._canvas.scroll_to_page(current_page)
         
         # Enable lazy rendering mode
         self._lazy_rendering_active = True
@@ -2010,7 +2031,39 @@ class MainWindow(QMainWindow):
         
         # Navigate to the clicked page
         if self._document.set_current_page(page_num):
-            self._canvas.scroll_to_page(page_num)
+            # Re-render based on current view mode
+            view_mode = self._document.get_view_mode()
+            
+            if view_mode == ViewMode.SINGLE_PAGE:
+                # Single page mode - render just this page
+                pixmap = self._document.render_page(page_num)
+                if pixmap:
+                    self._canvas.display_single_page(pixmap, page_num)
+            elif view_mode == ViewMode.FACING:
+                # Facing pages mode - render appropriate pair
+                if page_num == 0:
+                    # Show cover page alone
+                    pixmap = self._document.render_page(0)
+                    if pixmap:
+                        self._canvas.display_facing_pages(pixmap, None, 0, None)
+                else:
+                    # Determine page pair
+                    if page_num % 2 == 1:
+                        left_page = page_num
+                        right_page = page_num + 1 if page_num + 1 < self._document.get_page_count() else None
+                    else:
+                        left_page = page_num - 1
+                        right_page = page_num
+                    
+                    left_pixmap = self._document.render_page(left_page)
+                    right_pixmap = self._document.render_page(right_page) if right_page is not None else None
+                    
+                    if left_pixmap:
+                        self._canvas.display_facing_pages(left_pixmap, right_pixmap, left_page, right_page)
+            else:
+                # Continuous mode - just scroll to page
+                self._canvas.scroll_to_page(page_num)
+            
             self._update_navigation_controls()
             self._update_view_toolbar_state()
             self._status_bar.showMessage(f"Jumped to page {page_num + 1}", 2000)
@@ -2116,6 +2169,136 @@ class MainWindow(QMainWindow):
         """Clear the current text selection."""
         self._canvas.clear_selection()
         self._status_bar.showMessage("Selection cleared", 1000)
+    
+    def _set_single_page_mode(self) -> None:
+        """Switch to single page view mode."""
+        if not self._document.is_open():
+            return
+        
+        # Update document view mode
+        self._document.set_view_mode(ViewMode.SINGLE_PAGE)
+        
+        # Update toolbar button states
+        self._view_toolbar._single_page_btn.setChecked(True)
+        self._view_toolbar._continuous_page_btn.setChecked(False)
+        self._view_toolbar._facing_page_btn.setChecked(False)
+        
+        # Re-render in single page mode
+        current_page = self._document.get_current_page()
+        pixmap = self._document.render_page(current_page)
+        if pixmap:
+            self._canvas.display_single_page(pixmap, current_page)
+            self._status_bar.showMessage("Single page mode activated", 2000)
+        
+        # Update navigation IMMEDIATELY
+        self._update_navigation_controls()
+        self._update_view_toolbar_state()
+        
+        # Delay thumbnail selection update to ensure canvas has updated
+        QTimer.singleShot(50, self._update_pages_panel_selection)
+    
+    def _set_continuous_mode(self) -> None:
+        """Switch to continuous scrolling view mode."""
+        if not self._document.is_open():
+            return
+        
+        # Store current page BEFORE mode switch
+        current_page = self._document.get_current_page()
+        
+        # Temporarily block scroll signals to prevent interference during rendering
+        self._canvas.verticalScrollBar().blockSignals(True)
+        
+        # Update document view mode
+        self._document.set_view_mode(ViewMode.CONTINUOUS)
+        
+        # Update toolbar button states
+        self._view_toolbar._single_page_btn.setChecked(False)
+        self._view_toolbar._continuous_page_btn.setChecked(True)
+        self._view_toolbar._facing_page_btn.setChecked(False)
+        
+        # Re-render in continuous mode, preserving current page
+        page_count = self._document.get_page_count()
+        
+        if page_count > 50:
+            self._render_initial_pages_lazy(preserve_page=True)
+        else:
+            self._render_all_pages(preserve_page=True)
+        
+        # Force process events to ensure layout is calculated
+        QApplication.processEvents()
+        
+        # Re-enable scroll signals AFTER scrolling
+        self._canvas.verticalScrollBar().blockSignals(False)
+        
+        # Ensure we're still on the same page after rendering
+        self._document.set_current_page(current_page)
+        
+        self._status_bar.showMessage("Continuous view mode activated", 2000)
+        
+        # Update navigation IMMEDIATELY
+        self._update_navigation_controls()
+        self._update_view_toolbar_state()
+        
+        # Delay thumbnail selection update to ensure scroll completes
+        QTimer.singleShot(200, self._update_pages_panel_selection)
+    
+    def _set_facing_pages_mode(self) -> None:
+        """Switch to facing pages view mode (two pages side-by-side)."""
+        if not self._document.is_open():
+            return
+        
+        # Store current page BEFORE mode switch
+        current_page = self._document.get_current_page()
+        
+        # Update document view mode
+        self._document.set_view_mode(ViewMode.FACING)
+        
+        # Update toolbar button states
+        self._view_toolbar._single_page_btn.setChecked(False)
+        self._view_toolbar._continuous_page_btn.setChecked(False)
+        self._view_toolbar._facing_page_btn.setChecked(True)
+        
+        # Render facing pages
+        # In facing mode, show page pairs
+        # First page (page 0) is shown alone (cover)
+        # Then pages are paired: 1-2, 3-4, 5-6, etc.
+        
+        if current_page == 0:
+            # Show only first page (cover)
+            pixmap = self._document.render_page(0)
+            if pixmap:
+                self._canvas.display_facing_pages(pixmap, None, 0, None)
+        else:
+            # Determine which pair to show
+            # For odd pages (1, 3, 5...), show with next page (1-2, 3-4, 5-6)
+            # For even pages (2, 4, 6...), show with previous page (1-2, 3-4, 5-6)
+            if current_page % 2 == 1:
+                # Odd page - show with next page
+                left_page = current_page
+                right_page = current_page + 1 if current_page + 1 < self._document.get_page_count() else None
+            else:
+                # Even page - show with previous page
+                left_page = current_page - 1
+                right_page = current_page
+            
+            # Render both pages
+            left_pixmap = self._document.render_page(left_page)
+            right_pixmap = self._document.render_page(right_page) if right_page is not None else None
+            
+            if left_pixmap:
+                self._canvas.display_facing_pages(left_pixmap, right_pixmap, left_page, right_page)
+        
+        # Ensure current page is preserved in document
+        self._document.set_current_page(current_page)
+        
+        self._status_bar.showMessage("Facing pages mode activated", 2000)
+        
+        # Update navigation IMMEDIATELY
+        self._update_navigation_controls()
+        self._update_view_toolbar_state()
+        
+        # Delay thumbnail selection update to ensure canvas has updated
+        QTimer.singleShot(50, self._update_pages_panel_selection)
     
     def closeEvent(self, event) -> None:
         """

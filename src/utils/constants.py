@@ -14,6 +14,15 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 """
 
+from enum import Enum
+
+
+class ViewMode(Enum):
+    """PDF document view modes."""
+    CONTINUOUS = "continuous"  # Scrolling continuous view (current default)
+    SINGLE_PAGE = "single"     # One page at a time, no scrolling
+    FACING = "facing"          # Two pages side-by-side like a book
+
 # Zoom level constants
 # Maps display strings to zoom multipliers
 ZOOM_LEVELS = {

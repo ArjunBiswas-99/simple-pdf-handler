@@ -1,7 +1,7 @@
 """
 Simple PDF Handler - Modern Polish Styles
 
-MS Word-inspired professional UI with crisp buttons, good contrast, and smooth interactions.
+MS Word EXACT UI replication - Microsoft Office colors and design.
 
 Copyright (C) 2024 Arjun Biswas
 
@@ -14,17 +14,17 @@ the Free Software Foundation, either version 3 of the License, or
 
 class ModernPolishStyles:
     """
-    MS Word-inspired modern UI styles.
-    Focuses on: clarity, contrast, professionalism, and smooth interactions.
+    MS Word exact UI replication.
+    Uses Microsoft Office's actual colors and design patterns from Office 365.
     """
     
     @staticmethod
     def get_appbar_style() -> str:
-        """Solid, professional AppBar style."""
+        """MS Word AppBar - exact Microsoft colors."""
         return """
             AppBar {
-                background-color: #FFFFFF;
-                border-bottom: 1px solid #DCDCDC;
+                background-color: #F3F2F1;
+                border-bottom: 1px solid #D2D0CE;
             }
             
             /* Dark theme */
@@ -33,25 +33,25 @@ class ModernPolishStyles:
                 border-bottom: 1px solid #3F3F3F;
             }
             
-            /* AppBar buttons */
+            /* AppBar buttons - MS Word style */
             AppBar QPushButton {
                 background-color: transparent;
-                border: 1px solid transparent;
-                border-radius: 4px;
-                padding: 6px 10px;
-                color: #323232;
-                font-size: 16px;
-                min-width: 36px;
-                min-height: 36px;
+                border: none;
+                border-radius: 3px;
+                padding: 8px 12px;
+                color: #323130;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 14px;
+                min-width: 32px;
+                min-height: 32px;
             }
             
             AppBar QPushButton:hover:enabled {
-                background-color: #F3F3F3;
-                border-color: #D4D4D4;
+                background-color: #F3F2F1;
             }
             
             AppBar QPushButton:pressed:enabled {
-                background-color: #E8E8E8;
+                background-color: #E1DFDD;
             }
             
             /* Dark theme buttons */
@@ -61,7 +61,6 @@ class ModernPolishStyles:
             
             AppBar[dark="true"] QPushButton:hover:enabled {
                 background-color: #3F3F3F;
-                border-color: #555555;
             }
             
             AppBar[dark="true"] QPushButton:pressed:enabled {
@@ -71,13 +70,13 @@ class ModernPolishStyles:
     
     @staticmethod
     def get_toolbar_style() -> str:
-        """MS Word-inspired toolbar style with solid backgrounds and crisp buttons."""
+        """MS Word EXACT toolbar - Ribbon appearance with Microsoft colors."""
         return """
-            /* Toolbar container */
+            /* Toolbar container - MS Word Ribbon color */
             ViewToolbar, QToolBar {
-                background-color: #F8F8F8;
-                border-bottom: 1px solid #DCDCDC;
-                padding: 4px 8px;
+                background-color: #FAFAFA;
+                border-bottom: 1px solid #D2D0CE;
+                padding: 6px 12px;
             }
             
             /* Dark theme */
@@ -86,38 +85,36 @@ class ModernPolishStyles:
                 border-bottom: 1px solid #3F3F3F;
             }
             
-            /* Toolbar buttons - MS Word style */
+            /* Toolbar buttons - EXACT MS Word button style */
             ViewToolbar QPushButton, QToolBar QPushButton {
                 background-color: transparent;
-                border: 1px solid transparent;
-                border-radius: 4px;
-                padding: 6px 12px;
-                color: #323232;
-                font-size: 13px;
-                font-weight: 500;
-                min-height: 32px;
+                border: none;
+                border-radius: 3px;
+                padding: 8px 12px;
+                color: #323130;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 11px;
+                min-height: 28px;
             }
             
             ViewToolbar QPushButton:hover:enabled, QToolBar QPushButton:hover:enabled {
-                background-color: #E8F4FD;
-                border-color: #CCE4F7;
+                background-color: #F3F2F1;
             }
             
             ViewToolbar QPushButton:pressed:enabled, QToolBar QPushButton:pressed:enabled {
-                background-color: #D0E8F7;
-                border-color: #B8D6EB;
+                background-color: #E1DFDD;
             }
             
             ViewToolbar QPushButton:disabled, QToolBar QPushButton:disabled {
-                color: #BEBEBE;
+                color: #A19F9D;
                 background-color: transparent;
             }
             
             ViewToolbar QPushButton:checked, QToolBar QPushButton:checked {
-                background-color: #2680EB;
-                color: white;
-                border-color: #2680EB;
-                font-weight: 600;
+                background-color: #EDEBE9;
+                color: #0078D4;
+                border-left: 3px solid #0078D4;
+                padding-left: 9px;
             }
             
             /* Dark theme toolbar buttons */
@@ -127,7 +124,6 @@ class ModernPolishStyles:
             
             ViewToolbar[dark="true"] QPushButton:hover:enabled, QToolBar[dark="true"] QPushButton:hover:enabled {
                 background-color: #3F3F3F;
-                border-color: #555555;
             }
             
             ViewToolbar[dark="true"] QPushButton:pressed:enabled, QToolBar[dark="true"] QPushButton:pressed:enabled {
@@ -138,48 +134,51 @@ class ModernPolishStyles:
                 color: #666666;
             }
             
-            /* Toolbar separators */
+            /* Toolbar separators - MS Word group dividers */
             ViewToolbar QFrame[frameShape="4"], QToolBar QFrame[frameShape="4"] {
-                background-color: #DCDCDC;
+                background-color: #D2D0CE;
                 max-width: 1px;
-                min-height: 24px;
-                margin: 4px 8px;
+                min-height: 20px;
+                margin: 6px 10px;
             }
             
             ViewToolbar[dark="true"] QFrame[frameShape="4"], QToolBar[dark="true"] QFrame[frameShape="4"] {
                 background-color: #3F3F3F;
             }
             
-            /* Toolbar combo boxes */
+            /* Toolbar combo boxes - MS Word dropdowns */
             ViewToolbar QComboBox, QToolBar QComboBox {
-                background-color: white;
-                border: 1px solid #D4D4D4;
-                border-radius: 4px;
-                padding: 6px 12px;
-                min-height: 32px;
-                color: #323232;
+                background-color: #FFFFFF;
+                border: 1px solid #D2D0CE;
+                border-radius: 2px;
+                padding: 5px 10px;
+                min-height: 24px;
+                color: #323130;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 11px;
             }
             
             ViewToolbar QComboBox:hover, QToolBar QComboBox:hover {
-                border-color: #B0B0B0;
+                border-color: #A19F9D;
+                background-color: #F3F2F1;
             }
             
             ViewToolbar QComboBox:focus, QToolBar QComboBox:focus {
-                border-color: #2680EB;
-                border-width: 2px;
+                border-color: #0078D4;
+                border-width: 1px;
             }
             
             ViewToolbar QComboBox::drop-down, QToolBar QComboBox::drop-down {
                 border: none;
-                width: 24px;
+                width: 20px;
             }
             
             ViewToolbar QComboBox::down-arrow, QToolBar QComboBox::down-arrow {
                 image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 6px solid #323232;
-                margin-right: 8px;
+                border-left: 3px solid transparent;
+                border-right: 3px solid transparent;
+                border-top: 5px solid #323130;
+                margin-right: 6px;
             }
             
             /* Dark theme combo boxes */
@@ -193,24 +192,26 @@ class ModernPolishStyles:
                 border-top-color: #E0E0E0;
             }
             
-            /* Toolbar line edits */
+            /* Toolbar line edits - MS Word input fields */
             ViewToolbar QLineEdit, QToolBar QLineEdit {
-                background-color: white;
-                border: 1px solid #D4D4D4;
-                border-radius: 4px;
-                padding: 6px 8px;
-                color: #323232;
-                min-height: 32px;
+                background-color: #FFFFFF;
+                border: 1px solid #D2D0CE;
+                border-radius: 2px;
+                padding: 5px 8px;
+                color: #323130;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 11px;
+                min-height: 24px;
             }
             
             ViewToolbar QLineEdit:hover, QToolBar QLineEdit:hover {
-                border-color: #B0B0B0;
+                border-color: #A19F9D;
+                background-color: #F3F2F1;
             }
             
             ViewToolbar QLineEdit:focus, QToolBar QLineEdit:focus {
-                border-color: #2680EB;
-                border-width: 2px;
-                padding: 5px 7px;
+                border-color: #0078D4;
+                border-width: 1px;
             }
             
             ViewToolbar[dark="true"] QLineEdit, QToolBar[dark="true"] QLineEdit {
@@ -218,15 +219,27 @@ class ModernPolishStyles:
                 border-color: #555555;
                 color: #E0E0E0;
             }
+            
+            /* Toolbar labels - MS Word text */
+            ViewToolbar QLabel, QToolBar QLabel {
+                color: #323130;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 11px;
+                padding: 0 4px;
+            }
+            
+            ViewToolbar[dark="true"] QLabel, QToolBar[dark="true"] QLabel {
+                color: #E0E0E0;
+            }
         """
     
     @staticmethod
     def get_mode_tabs_style() -> str:
-        """MS Word-style mode tabs."""
+        """MS Word EXACT tab style - Ribbon tabs."""
         return """
             ModeTabs {
-                background-color: #F8F8F8;
-                border-bottom: 1px solid #DCDCDC;
+                background-color: #F3F2F1;
+                border-bottom: 1px solid #D2D0CE;
             }
             
             ModeTabs[dark="true"] {
@@ -237,23 +250,21 @@ class ModernPolishStyles:
             ModeTabs QPushButton {
                 background-color: transparent;
                 border: none;
-                border-bottom: 3px solid transparent;
+                border-bottom: 2px solid transparent;
                 padding: 10px 20px;
-                color: #646464;
-                font-size: 14px;
-                font-weight: 500;
+                color: #323130;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 12px;
             }
             
             ModeTabs QPushButton:hover {
-                background-color: #EFEFEF;
-                color: #323232;
+                background-color: #F3F2F1;
             }
             
             ModeTabs QPushButton:checked {
-                color: #2680EB;
-                border-bottom: 3px solid #2680EB;
-                background-color: transparent;
-                font-weight: 600;
+                color: #0078D4;
+                border-bottom: 2px solid #0078D4;
+                background-color: #FFFFFF;
             }
             
             /* Dark theme */
@@ -274,19 +285,19 @@ class ModernPolishStyles:
     
     @staticmethod
     def get_complete_modern_stylesheet() -> str:
-        """Get complete modern polish stylesheet."""
+        """Get complete MS Word stylesheet."""
         return f"""
             /* ============================================
-               MODERN POLISH STYLES - MS WORD INSPIRED
+               MS WORD EXACT STYLES - OFFICE 365
                ============================================ */
             
             {ModernPolishStyles.get_appbar_style()}
             {ModernPolishStyles.get_toolbar_style()}
             {ModernPolishStyles.get_mode_tabs_style()}
             
-            /* Global improvements */
+            /* Global typography - Segoe UI (MS Word font) */
             * {{
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
             }}
             
             QMainWindow {{
