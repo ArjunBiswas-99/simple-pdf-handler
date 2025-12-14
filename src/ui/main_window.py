@@ -41,6 +41,7 @@ from core.pdf_document import PDFDocument
 from core.pdf_loader_worker import PDFLoaderWorker
 from core.zoom_render_worker import ZoomRenderWorker
 from core.text_search_worker import TextSearchWorker
+from core.thumbnail_render_worker import ThumbnailRenderWorker
 from core.search_results_manager import SearchResultsManager
 from ui.styles.theme_manager import get_theme_manager
 from ui.styles.themes import ThemeType
@@ -69,6 +70,7 @@ class MainWindow(QMainWindow):
         self._document = PDFDocument()
         self._loader_worker = None
         self._zoom_worker = None
+        self._thumbnail_worker = None
         
         # Search functionality
         self._search_worker = None
@@ -289,6 +291,9 @@ class MainWindow(QMainWindow):
         search_panel = SidebarSearchPanel()
         attachments_panel = AttachmentsPanel()
         
+        # Connect pages panel signals
+        pages_panel.page_clicked.connect(self._on_page_thumbnail_clicked)
+        
         # Connect search panel signals
         search_panel.search_requested.connect(self._on_search_requested)
         search_panel.next_match_requested.connect(self._find_next)
@@ -299,6 +304,7 @@ class MainWindow(QMainWindow):
         bookmarks_panel.bookmark_clicked.connect(self._on_bookmark_clicked)
         
         # Store references to panels for updates
+        self._pages_panel = pages_panel
         self._sidebar_search_panel = search_panel
         self._bookmarks_panel = bookmarks_panel
         
@@ -543,6 +549,9 @@ class MainWindow(QMainWindow):
         # Load bookmarks into sidebar
         self._load_bookmarks()
         
+        # Initialize pages panel with page count
+        self._load_pages_panel()
+        
         # Use lazy rendering for large documents to avoid UI freeze
         if page_count > 50:
             self._render_initial_pages_lazy()
@@ -565,6 +574,10 @@ class MainWindow(QMainWindow):
             # Clear bookmarks
             if hasattr(self, '_bookmarks_panel'):
                 self._bookmarks_panel.clear()
+            
+            # Clear pages panel
+            if hasattr(self, '_pages_panel'):
+                self._pages_panel.clear()
             
             self._status_bar.showMessage("Document closed")
     
@@ -800,6 +813,7 @@ class MainWindow(QMainWindow):
             self._document.set_current_page(visible_page)
             self._update_navigation_controls()
             self._update_view_toolbar_state()
+            self._update_pages_panel_selection()
         
         # Trigger on-demand rendering if lazy rendering is active
         if self._lazy_rendering_active:
@@ -1964,7 +1978,122 @@ class MainWindow(QMainWindow):
             self._canvas.scroll_to_page(page_num)
             self._update_navigation_controls()
             self._update_view_toolbar_state()
+            self._update_pages_panel_selection()
             self._status_bar.showMessage(f"Jumped to page {page_num + 1}", 2000)
+    
+    def _on_page_thumbnail_clicked(self, page_num: int) -> None:
+        """
+        Handle thumbnail click from pages panel - navigate to page.
+        
+        Args:
+            page_num: Page number to navigate to (0-indexed)
+        """
+        if not self._document.is_open():
+            return
+        
+        # Navigate to the clicked page
+        if self._document.set_current_page(page_num):
+            self._canvas.scroll_to_page(page_num)
+            self._update_navigation_controls()
+            self._update_view_toolbar_state()
+            self._status_bar.showMessage(f"Jumped to page {page_num + 1}", 2000)
+    
+    def _load_pages_panel(self) -> None:
+        """Initialize pages panel with current document pages."""
+        if not self._document.is_open() or not hasattr(self, '_pages_panel'):
+            return
+        
+        page_count = self._document.get_page_count()
+        
+        # Initialize thumbnail widgets
+        self._pages_panel.load_pages(page_count)
+        
+        # Set current page selection
+        self._update_pages_panel_selection()
+        
+        # Start rendering thumbnails in background
+        self._start_thumbnail_rendering()
+    
+    def _start_thumbnail_rendering(self) -> None:
+        """Start background rendering of page thumbnails."""
+        if not self._document.is_open() or not hasattr(self, '_pages_panel'):
+            return
+        
+        # Cancel any existing thumbnail rendering
+        if self._thumbnail_worker and self._thumbnail_worker.isRunning():
+            self._thumbnail_worker.cancel()
+            self._thumbnail_worker.wait()
+        
+        page_count = self._document.get_page_count()
+        
+        # Create thumbnail render worker
+        self._thumbnail_worker = ThumbnailRenderWorker(
+            self._document._backend,
+            page_count,
+            thumbnail_scale=0.25  # 25% of original size for thumbnails
+        )
+        
+        # Connect signals
+        self._thumbnail_worker.thumbnail_ready.connect(self._on_thumbnail_ready)
+        self._thumbnail_worker.progress_updated.connect(self._on_thumbnail_progress)
+        self._thumbnail_worker.rendering_completed.connect(self._on_thumbnail_rendering_completed)
+        self._thumbnail_worker.rendering_failed.connect(self._on_thumbnail_rendering_failed)
+        
+        # Start rendering
+        self._thumbnail_worker.start()
+        self._status_bar.showMessage(f"Rendering thumbnails for {page_count} pages...")
+    
+    def _on_thumbnail_ready(self, page_number: int, pixmap: QPixmap) -> None:
+        """
+        Handle thumbnail ready signal.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            pixmap: Rendered thumbnail pixmap
+        """
+        if hasattr(self, '_pages_panel'):
+            self._pages_panel.set_thumbnail(page_number, pixmap)
+    
+    def _on_thumbnail_progress(self, current_page: int, total_pages: int) -> None:
+        """
+        Handle thumbnail rendering progress.
+        
+        Args:
+            current_page: Current page being rendered (1-indexed for display)
+            total_pages: Total number of pages
+        """
+        progress_percent = int((current_page / total_pages) * 100)
+        self._status_bar.showMessage(
+            f"Rendering thumbnails: {current_page}/{total_pages} ({progress_percent}%)"
+        )
+    
+    def _on_thumbnail_rendering_completed(self, total_rendered: int) -> None:
+        """
+        Handle completion of thumbnail rendering.
+        
+        Args:
+            total_rendered: Total number of thumbnails rendered
+        """
+        self._status_bar.showMessage(
+            f"Thumbnails rendered: {total_rendered} pages", 3000
+        )
+    
+    def _on_thumbnail_rendering_failed(self, error_message: str) -> None:
+        """
+        Handle thumbnail rendering failure.
+        
+        Args:
+            error_message: Error description
+        """
+        self._status_bar.showMessage(f"Thumbnail rendering failed: {error_message}")
+    
+    def _update_pages_panel_selection(self) -> None:
+        """Update pages panel to highlight current page."""
+        if not self._document.is_open() or not hasattr(self, '_pages_panel'):
+            return
+        
+        current_page = self._document.get_current_page()
+        self._pages_panel.set_current_page(current_page)
     
     def _clear_selection(self) -> None:
         """Clear the current text selection."""
@@ -1990,6 +2119,10 @@ class MainWindow(QMainWindow):
         if self._zoom_worker and self._zoom_worker.isRunning():
             self._zoom_worker.cancel()
             self._zoom_worker.wait()
+        
+        if self._thumbnail_worker and self._thumbnail_worker.isRunning():
+            self._thumbnail_worker.cancel()
+            self._thumbnail_worker.wait()
         
         if self._search_worker and self._search_worker.isRunning():
             self._search_worker.cancel()
