@@ -232,6 +232,7 @@ class MainWindow(QMainWindow):
             self._canvas.scroll_to_page(page_index)
             self._update_navigation_controls()
             self._update_view_toolbar_state()
+            self._update_pages_panel_selection()
     
     def _on_toolbar_zoom_changed(self, text: str) -> None:
         """
@@ -589,6 +590,7 @@ class MainWindow(QMainWindow):
         if self._document.set_current_page(0):
             self._canvas.scroll_to_page(0)
             self._update_navigation_controls()
+            self._update_pages_panel_selection()
     
     def _go_to_previous_page(self) -> None:
         """Navigate to the previous page."""
@@ -600,6 +602,7 @@ class MainWindow(QMainWindow):
             if self._document.set_current_page(current - 1):
                 self._canvas.scroll_to_page(current - 1)
                 self._update_navigation_controls()
+                self._update_pages_panel_selection()
     
     def _go_to_next_page(self) -> None:
         """Navigate to the next page."""
@@ -612,6 +615,7 @@ class MainWindow(QMainWindow):
             if self._document.set_current_page(current + 1):
                 self._canvas.scroll_to_page(current + 1)
                 self._update_navigation_controls()
+                self._update_pages_panel_selection()
     
     def _go_to_last_page(self) -> None:
         """Navigate to the last page of the document."""
@@ -622,6 +626,7 @@ class MainWindow(QMainWindow):
         if self._document.set_current_page(last_page):
             self._canvas.scroll_to_page(last_page)
             self._update_navigation_controls()
+            self._update_pages_panel_selection()
     
     def _on_page_input_changed(self) -> None:
         """Handle manual page number input."""
@@ -637,6 +642,7 @@ class MainWindow(QMainWindow):
             if self._document.set_current_page(page_index):
                 self._canvas.scroll_to_page(page_index)
                 self._update_navigation_controls()
+                self._update_pages_panel_selection()
             else:
                 # Invalid page number, reset to current
                 current = self._document.get_current_page()
