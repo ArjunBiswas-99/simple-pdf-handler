@@ -61,8 +61,9 @@ class MainWindow(QMainWindow):
     Manages the user interface and coordinates between components.
     """
     
-    # File size threshold for using threaded loading (10MB)
-    LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
+    # File size threshold for using threaded loading (5MB)
+    # Lowered from 10MB to ensure better responsiveness for larger files
+    LARGE_FILE_THRESHOLD = 5 * 1024 * 1024
     
     def __init__(self):
         """Initialize the main window."""
@@ -434,11 +435,15 @@ class MainWindow(QMainWindow):
         # Add to recent files
         settings.add_recent_file(file_path)
         
+        # Show immediate feedback in status bar
+        self._status_bar.showMessage("Preparing to open PDF...")
+        QApplication.processEvents()  # Force UI update
+        
         # Check file size to decide loading strategy
         file_size = os.path.getsize(file_path)
         
         if file_size >= self.LARGE_FILE_THRESHOLD:
-            # Large file - use threaded loading
+            # Large file - use threaded loading with immediate progress dialog
             self._load_file_async(file_path, file_size)
         else:
             # Small file - load synchronously
@@ -474,19 +479,25 @@ class MainWindow(QMainWindow):
             file_path: Path to the PDF file
             file_size: Size of the file in bytes
         """
+        # Show progress dialog IMMEDIATELY (before any heavy operations)
+        size_mb = file_size / (1024 * 1024)
+        file_name = os.path.basename(file_path)
+        
+        self._progress_dialog.reset()
+        self._progress_dialog.set_status(f"Opening {file_name}...")
+        self._progress_dialog.set_file_info(f"File size: {size_mb:.1f} MB")
+        self._progress_dialog.show()
+        
+        # Force UI update to show dialog immediately
+        QApplication.processEvents()
+        
         # Create and configure worker thread
         self._loader_worker = PDFLoaderWorker(file_path)
         self._loader_worker.progress_updated.connect(self._progress_dialog.update_progress)
         self._loader_worker.loading_completed.connect(self._on_async_loading_completed)
         self._loader_worker.loading_failed.connect(self._on_async_loading_failed)
         
-        # Set file info in progress dialog
-        size_mb = file_size / (1024 * 1024)
-        self._progress_dialog.set_file_info(f"File size: {size_mb:.1f} MB")
-        
-        # Show progress dialog and start loading
-        self._progress_dialog.reset()
-        self._progress_dialog.show()
+        # Start loading in background
         self._loader_worker.start()
     
     def _on_async_loading_completed(self, backend) -> None:
