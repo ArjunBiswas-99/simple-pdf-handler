@@ -20,7 +20,7 @@ import re
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QMenuBar, QMenu, QStatusBar,
     QToolBar, QLabel, QLineEdit, QPushButton, QWidget, QHBoxLayout, QComboBox,
-    QSplitter, QApplication
+    QSplitter, QApplication, QVBoxLayout, QScrollArea
 )
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QAction, QKeySequence, QPixmap
@@ -28,6 +28,15 @@ from ui.pdf_canvas import PDFCanvas
 from ui.progress_dialog import ProgressDialog
 from ui.left_side_panel import LeftSidePanel, AccordionSection
 from ui.search_panel import SearchPanel
+from ui.app_bar import AppBar
+from ui.mode_tabs import ModeTabs
+from ui.toolbars.view_toolbar import ViewToolbar
+from ui.sidebar.left_sidebar import LeftSidebar
+from ui.sidebar.panels.pages_panel import PagesPanel
+from ui.sidebar.panels.bookmarks_panel import BookmarksPanel
+from ui.sidebar.panels.search_panel import SearchPanel as SidebarSearchPanel
+from ui.sidebar.panels.attachments_panel import AttachmentsPanel
+from ui.styles.design_tokens import AppMode, SidebarMode, SIZING
 from core.pdf_document import PDFDocument
 from core.pdf_loader_worker import PDFLoaderWorker
 from core.zoom_render_worker import ZoomRenderWorker
@@ -92,33 +101,73 @@ class MainWindow(QMainWindow):
         # Apply professional stylesheet
         self.setStyleSheet(ProfessionalStyles.get_complete_stylesheet())
         
-        # Create menu bar
-        self._create_menu_bar()
+        # Create main container widget with vertical layout
+        main_container = QWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        main_container.setLayout(main_layout)
         
-        # Create navigation toolbar
-        self._create_toolbar()
+        # Create AppBar (replaces menu bar)
+        self._app_bar = AppBar()
+        self._app_bar.theme_toggle_clicked.connect(self._on_toggle_theme)
+        self._app_bar.help_clicked.connect(self._on_about)
+        main_layout.addWidget(self._app_bar)
+        
+        # Create ModeTabs
+        self._mode_tabs = ModeTabs()
+        self._mode_tabs.mode_changed.connect(self._on_mode_changed)
+        main_layout.addWidget(self._mode_tabs)
+        
+        # Create View Toolbar (context toolbar for View mode)
+        self._view_toolbar = ViewToolbar()
+        self._connect_view_toolbar_signals()
+        
+        # Wrap toolbar in scroll area for horizontal scrolling at narrow widths
+        toolbar_scroll = QScrollArea()
+        toolbar_scroll.setWidget(self._view_toolbar)
+        toolbar_scroll.setWidgetResizable(True)
+        toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        toolbar_scroll.setMaximumHeight(SIZING['toolbar_height'] + 10)
+        toolbar_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        
+        main_layout.addWidget(toolbar_scroll)
         
         # Create main content area with sidebar and canvas
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Create sidebar
+        # Create NEW sidebar with panels
+        self._new_sidebar = LeftSidebar()
+        self._setup_sidebar_panels()
+        
+        # Connect sidebar collapse/expand signals
+        self._new_sidebar.collapsed.connect(self._on_sidebar_collapsed)
+        self._new_sidebar.expanded.connect(self._on_sidebar_expanded)
+        
+        self._main_splitter.addWidget(self._new_sidebar)
+        
+        # Keep OLD sidebar for now (for search functionality)
         self._left_panel = LeftSidePanel()
-        splitter.addWidget(self._left_panel)
+        self._left_panel.hide()  # Hide but keep for search
         
         # Create PDF canvas
         self._canvas = PDFCanvas()
         self._canvas.verticalScrollBar().valueChanged.connect(self._on_scroll)
         self._canvas.text_selected.connect(self._on_text_selected)
         self._canvas.zoom_requested.connect(self._on_zoom_requested)
-        splitter.addWidget(self._canvas)
+        self._main_splitter.addWidget(self._canvas)
         
         # Set splitter properties
-        splitter.setStretchFactor(0, 0)  # Sidebar doesn't stretch
-        splitter.setStretchFactor(1, 1)  # Canvas stretches
-        splitter.setSizes([300, 700])     # Initial sizes
+        self._main_splitter.setStretchFactor(0, 0)  # Sidebar doesn't stretch
+        self._main_splitter.setStretchFactor(1, 1)  # Canvas stretches
+        self._main_splitter.setSizes([280, 700])     # Initial sizes
         
-        # Set as central widget
-        self.setCentralWidget(splitter)
+        # Add splitter to main layout
+        main_layout.addWidget(self._main_splitter)
+        
+        # Set main container as central widget
+        self.setCentralWidget(main_container)
         
         # Create and add search section to sidebar
         self._create_search_section()
@@ -189,11 +238,10 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
     
-    def _create_toolbar(self) -> None:
+    def _create_toolbar(self) -> QToolBar:
         """Create and configure the navigation toolbar."""
         toolbar = QToolBar("Navigation")
         toolbar.setMovable(False)
-        self.addToolBar(toolbar)
         
         # Left panel toggle button (icon only)
         self._panel_toggle_btn = QPushButton("☰")
@@ -288,6 +336,8 @@ class MainWindow(QMainWindow):
         self._fit_page_btn.setEnabled(False)
         self._fit_page_btn.clicked.connect(self._fit_page)
         toolbar.addWidget(self._fit_page_btn)
+        
+        return toolbar
     
     def _create_search_section(self) -> None:
         """Create and configure the search accordion section."""
@@ -316,8 +366,140 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("Ready")
     
+    def _connect_view_toolbar_signals(self) -> None:
+        """Connect View Toolbar signals to MainWindow handlers."""
+        # File operations
+        self._view_toolbar.open_file.connect(self._on_open_file)
+        
+        # Navigation
+        self._view_toolbar.first_page.connect(self._go_to_first_page)
+        self._view_toolbar.previous_page.connect(self._go_to_previous_page)
+        self._view_toolbar.next_page.connect(self._go_to_next_page)
+        self._view_toolbar.last_page.connect(self._go_to_last_page)
+        self._view_toolbar.page_changed.connect(self._on_toolbar_page_changed)
+        
+        # Zoom
+        self._view_toolbar.zoom_in.connect(self._zoom_in)
+        self._view_toolbar.zoom_out.connect(self._zoom_out)
+        self._view_toolbar.zoom_changed.connect(self._on_toolbar_zoom_changed)
+        self._view_toolbar.fit_width.connect(self._fit_width)
+        self._view_toolbar.fit_page.connect(self._fit_page)
+    
+    def _on_toolbar_page_changed(self, page_num: int) -> None:
+        """
+        Handle page change from toolbar input.
+        
+        Args:
+            page_num: Page number (1-indexed from user input)
+        """
+        if not self._document.is_open():
+            return
+        
+        # Convert to 0-indexed
+        page_index = page_num - 1
+        
+        if self._document.set_current_page(page_index):
+            self._canvas.scroll_to_page(page_index)
+            self._update_navigation_controls()
+            self._update_view_toolbar_state()
+    
+    def _on_toolbar_zoom_changed(self, text: str) -> None:
+        """
+        Handle zoom level change from toolbar.
+        
+        Args:
+            text: Selected zoom level text (e.g., "100%")
+        """
+        if not self._document.is_open():
+            return
+        
+        # Get zoom level from text
+        zoom_level = ZOOM_LEVELS.get(text)
+        if zoom_level is None:
+            return
+        
+        # Apply the new zoom level
+        self._apply_zoom(zoom_level)
+    
+    def _update_view_toolbar_state(self) -> None:
+        """Update View Toolbar state based on current document."""
+        if not self._document.is_open():
+            # Disable toolbar controls
+            self._view_toolbar.set_navigation_enabled(False)
+            self._view_toolbar.set_navigation_buttons_state(False, False)
+            self._view_toolbar.set_zoom_enabled(False)
+            self._view_toolbar.set_page_info(0, 0)
+            return
+        
+        current_page = self._document.get_current_page()
+        page_count = self._document.get_page_count()
+        
+        # Update page info
+        self._view_toolbar.set_page_info(current_page, page_count)
+        
+        # Enable navigation
+        self._view_toolbar.set_navigation_enabled(True)
+        
+        # Update navigation buttons
+        can_go_prev = current_page > 0
+        can_go_next = current_page < page_count - 1
+        self._view_toolbar.set_navigation_buttons_state(can_go_prev, can_go_next)
+        
+        # Enable zoom controls
+        self._view_toolbar.set_zoom_enabled(True)
+        
+        # Update zoom display
+        zoom = self._document.get_zoom_level()
+        zoom_text = f"{int(zoom * 100)}%"
+        self._view_toolbar.set_zoom_level(zoom_text)
+    
+    def _setup_sidebar_panels(self) -> None:
+        """Set up all sidebar panels."""
+        # Create panels
+        pages_panel = PagesPanel()
+        bookmarks_panel = BookmarksPanel()
+        search_panel = SidebarSearchPanel()
+        attachments_panel = AttachmentsPanel()
+        
+        # Connect search panel signals
+        search_panel.search_requested.connect(self._on_search_requested)
+        search_panel.next_match_requested.connect(self._find_next)
+        search_panel.previous_match_requested.connect(self._find_previous)
+        search_panel.result_selected.connect(self._on_search_result_selected)
+        
+        # Store reference to search panel for updates
+        self._sidebar_search_panel = search_panel
+        
+        # Add panels to sidebar
+        self._new_sidebar.add_panel(SidebarMode.PAGES, pages_panel)
+        self._new_sidebar.add_panel(SidebarMode.BOOKMARKS, bookmarks_panel)
+        self._new_sidebar.add_panel(SidebarMode.SEARCH, search_panel)
+        self._new_sidebar.add_panel(SidebarMode.ATTACHMENTS, attachments_panel)
+    
+    def _on_mode_changed(self, mode: AppMode) -> None:
+        """
+        Handle mode change from ModeTabs.
+        
+        Args:
+            mode: The new active mode
+        """
+        # For now, just log the mode change
+        # In future phases, this will switch context toolbars
+        self._status_bar.showMessage(f"Switched to {mode.value} mode", 2000)
+    
     def _setup_keyboard_shortcuts(self) -> None:
         """Set up keyboard shortcuts for navigation and search."""
+        # File operations shortcuts (since menu bar is hidden)
+        open_shortcut = QAction(self)
+        open_shortcut.setShortcut(QKeySequence("Ctrl+O"))
+        open_shortcut.triggered.connect(self._on_open_file)
+        self.addAction(open_shortcut)
+        
+        close_shortcut = QAction(self)
+        close_shortcut.setShortcut(QKeySequence("Ctrl+W"))
+        close_shortcut.triggered.connect(self._on_close_document)
+        self.addAction(close_shortcut)
+        
         # Previous page shortcuts
         prev_shortcut1 = QAction(self)
         prev_shortcut1.setShortcut(QKeySequence(Qt.Key.Key_Left))
@@ -510,13 +692,17 @@ class MainWindow(QMainWindow):
         # Update window title
         self._update_window_title(file_name)
         
-        # Enable navigation and zoom controls
+        # Update View Toolbar state
+        self._update_view_toolbar_state()
+        
+        # Enable navigation and zoom controls (old toolbar - will be removed later)
         self._update_navigation_controls()
         self._enable_zoom_controls()
         
         # Reset zoom to 100%
         self._document.set_zoom_level(DEFAULT_ZOOM)
-        self._zoom_combo.setCurrentText("100%")
+        if hasattr(self, '_zoom_combo'):
+            self._zoom_combo.setCurrentText("100%")
         
         # Update canvas zoom level
         self._canvas.set_zoom_level(DEFAULT_ZOOM)
@@ -536,6 +722,7 @@ class MainWindow(QMainWindow):
             self._document.close()
             self._canvas.clear()
             self._update_window_title()
+            self._update_view_toolbar_state()
             self._disable_navigation_controls()
             self._disable_zoom_controls()
             self._status_bar.showMessage("Document closed")
@@ -723,31 +910,41 @@ class MainWindow(QMainWindow):
             self._disable_navigation_controls()
             return
         
-        current_page = self._document.get_current_page()
-        page_count = self._document.get_page_count()
+        # Update View Toolbar (new)
+        self._update_view_toolbar_state()
         
-        # Update page input and label
-        self._page_input.setText(str(current_page + 1))
-        self._page_count_label.setText(f" of {page_count}")
-        
-        # Enable controls
-        self._page_input.setEnabled(True)
-        
-        # Enable/disable navigation buttons based on current position
-        self._first_page_btn.setEnabled(current_page > 0)
-        self._prev_page_btn.setEnabled(current_page > 0)
-        self._next_page_btn.setEnabled(current_page < page_count - 1)
-        self._last_page_btn.setEnabled(current_page < page_count - 1)
+        # Old toolbar controls - skip if they don't exist
+        if hasattr(self, '_page_input'):
+            current_page = self._document.get_current_page()
+            page_count = self._document.get_page_count()
+            
+            # Update page input and label
+            self._page_input.setText(str(current_page + 1))
+            self._page_count_label.setText(f" of {page_count}")
+            
+            # Enable controls
+            self._page_input.setEnabled(True)
+            
+            # Enable/disable navigation buttons based on current position
+            self._first_page_btn.setEnabled(current_page > 0)
+            self._prev_page_btn.setEnabled(current_page > 0)
+            self._next_page_btn.setEnabled(current_page < page_count - 1)
+            self._last_page_btn.setEnabled(current_page < page_count - 1)
     
     def _disable_navigation_controls(self) -> None:
         """Disable all navigation controls when no document is loaded."""
-        self._page_input.setEnabled(False)
-        self._page_input.setText("")
-        self._page_count_label.setText(" of 0")
-        self._first_page_btn.setEnabled(False)
-        self._prev_page_btn.setEnabled(False)
-        self._next_page_btn.setEnabled(False)
-        self._last_page_btn.setEnabled(False)
+        # Update View Toolbar (new)
+        self._update_view_toolbar_state()
+        
+        # Old toolbar controls - skip if they don't exist
+        if hasattr(self, '_page_input'):
+            self._page_input.setEnabled(False)
+            self._page_input.setText("")
+            self._page_count_label.setText(" of 0")
+            self._first_page_btn.setEnabled(False)
+            self._prev_page_btn.setEnabled(False)
+            self._next_page_btn.setEnabled(False)
+            self._last_page_btn.setEnabled(False)
     
     def _on_scroll(self) -> None:
         """Handle scroll events to update current page tracking and trigger on-demand rendering."""
@@ -761,6 +958,7 @@ class MainWindow(QMainWindow):
         if visible_page != self._document.get_current_page():
             self._document.set_current_page(visible_page)
             self._update_navigation_controls()
+            self._update_view_toolbar_state()
         
         # Trigger on-demand rendering if lazy rendering is active
         if self._lazy_rendering_active:
@@ -792,6 +990,18 @@ class MainWindow(QMainWindow):
             self._canvas.setStyleSheet("background-color: #1A1A1A;")
         else:
             self._canvas.setStyleSheet("background-color: #525252;")
+    
+    def _on_sidebar_collapsed(self) -> None:
+        """Handle sidebar collapse - update splitter sizes."""
+        total_width = self._main_splitter.width()
+        # Set sidebar to icon rail width (48px), give rest to canvas
+        self._main_splitter.setSizes([48, total_width - 48])
+    
+    def _on_sidebar_expanded(self) -> None:
+        """Handle sidebar expand - update splitter sizes."""
+        total_width = self._main_splitter.width()
+        # Set sidebar to full width (280px), give rest to canvas
+        self._main_splitter.setSizes([280, total_width - 280])
     
     def _on_about(self) -> None:
         """Display about dialog."""
@@ -827,19 +1037,23 @@ class MainWindow(QMainWindow):
     
     def _enable_zoom_controls(self) -> None:
         """Enable zoom controls when a document is loaded."""
-        self._zoom_in_btn.setEnabled(True)
-        self._zoom_out_btn.setEnabled(True)
-        self._zoom_combo.setEnabled(True)
-        self._fit_width_btn.setEnabled(True)
-        self._fit_page_btn.setEnabled(True)
+        # View toolbar handles this now via _update_view_toolbar_state
+        if hasattr(self, '_zoom_in_btn'):
+            self._zoom_in_btn.setEnabled(True)
+            self._zoom_out_btn.setEnabled(True)
+            self._zoom_combo.setEnabled(True)
+            self._fit_width_btn.setEnabled(True)
+            self._fit_page_btn.setEnabled(True)
     
     def _disable_zoom_controls(self) -> None:
         """Disable zoom controls when no document is loaded."""
-        self._zoom_in_btn.setEnabled(False)
-        self._zoom_out_btn.setEnabled(False)
-        self._zoom_combo.setEnabled(False)
-        self._fit_width_btn.setEnabled(False)
-        self._fit_page_btn.setEnabled(False)
+        # View toolbar handles this now via _update_view_toolbar_state
+        if hasattr(self, '_zoom_in_btn'):
+            self._zoom_in_btn.setEnabled(False)
+            self._zoom_out_btn.setEnabled(False)
+            self._zoom_combo.setEnabled(False)
+            self._fit_width_btn.setEnabled(False)
+            self._fit_page_btn.setEnabled(False)
     
     def _on_zoom_combo_changed(self, text: str) -> None:
         """
@@ -1130,17 +1344,22 @@ class MainWindow(QMainWindow):
         zoom_percent = int(zoom * 100)
         zoom_text = f"{zoom_percent}%"
         
-        # Update combo box if the value is in the list
-        if zoom_text in ZOOM_LEVEL_LABELS:
-            # Temporarily disconnect signal to avoid recursion
-            self._zoom_combo.blockSignals(True)
-            self._zoom_combo.setCurrentText(zoom_text)
-            self._zoom_combo.blockSignals(False)
-        else:
-            # Custom zoom level - show in combo but don't select
-            self._zoom_combo.blockSignals(True)
-            self._zoom_combo.setCurrentText(zoom_text)
-            self._zoom_combo.blockSignals(False)
+        # Update View Toolbar
+        self._view_toolbar.set_zoom_level(zoom_text)
+        
+        # Update old combo box if it exists
+        if hasattr(self, '_zoom_combo'):
+            # Update combo box if the value is in the list
+            if zoom_text in ZOOM_LEVEL_LABELS:
+                # Temporarily disconnect signal to avoid recursion
+                self._zoom_combo.blockSignals(True)
+                self._zoom_combo.setCurrentText(zoom_text)
+                self._zoom_combo.blockSignals(False)
+            else:
+                # Custom zoom level - show in combo but don't select
+                self._zoom_combo.blockSignals(True)
+                self._zoom_combo.setCurrentText(zoom_text)
+                self._zoom_combo.blockSignals(False)
     
     def _focus_search(self) -> None:
         """Focus the search panel and expand if collapsed."""
@@ -1202,7 +1421,19 @@ class MainWindow(QMainWindow):
     
     def _execute_search(self) -> None:
         """Execute the text search operation in background thread."""
-        search_text = self._search_panel.get_search_text()
+        # Get search text from whichever panel triggered it
+        search_text = None
+        case_sensitive = False
+        
+        # Try sidebar search panel first
+        if hasattr(self, '_sidebar_search_panel'):
+            search_text = self._sidebar_search_panel.get_search_text()
+            case_sensitive = self._sidebar_search_panel.is_case_sensitive()
+        
+        # Fallback to old search panel
+        if not search_text and self._search_panel:
+            search_text = self._search_panel.get_search_text()
+            case_sensitive = self._search_panel.is_case_sensitive()
         
         if not search_text or not self._document.is_open():
             return
@@ -1221,7 +1452,7 @@ class MainWindow(QMainWindow):
             self._document._backend,
             search_text,
             self._document.get_current_page(),
-            self._search_panel.is_case_sensitive()
+            case_sensitive
         )
         
         # Connect signals
@@ -1231,10 +1462,17 @@ class MainWindow(QMainWindow):
         self._search_worker.search_failed.connect(self._on_search_failed)
         self._search_worker.search_cancelled.connect(self._on_search_cancelled)
         
-        # Show progress and start search
-        self._search_panel.show_progress(True)
-        self._search_panel.set_progress(0, 100)
-        self._search_panel.set_match_counter("Searching...")
+        # Update both search panels
+        if self._search_panel:
+            self._search_panel.show_progress(True)
+            self._search_panel.set_progress(0, 100)
+            self._search_panel.set_match_counter("Searching...")
+        
+        if hasattr(self, '_sidebar_search_panel'):
+            self._sidebar_search_panel.show_progress(True)
+            self._sidebar_search_panel.set_progress(0, 100)
+            self._sidebar_search_panel.set_match_counter("Searching...")
+        
         self._status_bar.showMessage(f"Searching for '{search_text}'...")
         
         # Start search in background
@@ -1248,7 +1486,11 @@ class MainWindow(QMainWindow):
             current_page: Current page being searched (1-indexed for display)
             total_pages: Total number of pages
         """
-        self._search_panel.set_progress(current_page, total_pages)
+        # Update both search panels
+        if self._search_panel:
+            self._search_panel.set_progress(current_page, total_pages)
+        if hasattr(self, '_sidebar_search_panel'):
+            self._sidebar_search_panel.set_progress(current_page, total_pages)
     
     def _on_match_found(self, page_number: int, matches: list) -> None:
         """
@@ -1261,9 +1503,14 @@ class MainWindow(QMainWindow):
         # Add results to manager
         self._search_results.add_page_results(page_number, matches)
         
-        # Update match counter
+        # Update match counter in both panels
         total_matches = self._search_results.get_total_matches()
-        self._search_panel.set_match_counter(f"{total_matches} match{'es' if total_matches != 1 else ''}")
+        match_text = f"{total_matches} match{'es' if total_matches != 1 else ''}"
+        
+        if self._search_panel:
+            self._search_panel.set_match_counter(match_text)
+        if hasattr(self, '_sidebar_search_panel'):
+            self._sidebar_search_panel.set_match_counter(match_text)
         
         # If this is the first match, jump to it and show highlights
         if total_matches == 1:
@@ -1278,23 +1525,41 @@ class MainWindow(QMainWindow):
         Args:
             total_matches: Total number of matches found
         """
-        # Hide progress
-        self._search_panel.show_progress(False)
+        # Hide progress in both panels
+        if self._search_panel:
+            self._search_panel.show_progress(False)
+        if hasattr(self, '_sidebar_search_panel'):
+            self._sidebar_search_panel.show_progress(False)
         
         # Update UI based on results
         if total_matches > 0:
-            self._search_panel.set_match_counter(f"{total_matches} match{'es' if total_matches != 1 else ''}")
-            self._search_panel.enable_navigation(True)
-            self._status_bar.showMessage(f"Found {total_matches} match{'es' if total_matches != 1 else ''}")
+            match_text = f"{total_matches} match{'es' if total_matches != 1 else ''}"
+            
+            # Update both panels
+            if self._search_panel:
+                self._search_panel.set_match_counter(match_text)
+                self._search_panel.enable_navigation(True)
+            if hasattr(self, '_sidebar_search_panel'):
+                self._sidebar_search_panel.set_match_counter(match_text)
+                self._sidebar_search_panel.enable_navigation(True)
+            
+            self._status_bar.showMessage(f"Found {match_text}")
             
             # Update results list and highlights
             self._update_search_highlights()
             self._update_results_list()
         else:
-            self._search_panel.set_match_counter("No matches found")
-            self._search_panel.enable_navigation(False)
+            # Update both panels
+            if self._search_panel:
+                self._search_panel.set_match_counter("No matches found")
+                self._search_panel.enable_navigation(False)
+                self._search_panel.clear_results()
+            if hasattr(self, '_sidebar_search_panel'):
+                self._sidebar_search_panel.set_match_counter("No matches found")
+                self._sidebar_search_panel.enable_navigation(False)
+                self._sidebar_search_panel.clear_results()
+            
             self._status_bar.showMessage("No matches found")
-            self._search_panel.clear_results()
     
     def _on_search_failed(self, error_message: str) -> None:
         """
@@ -1408,8 +1673,11 @@ class MainWindow(QMainWindow):
                 
                 results_with_context.append((page_num, idx, context))
         
-        # Update the results list
-        self._search_panel.update_results_list(results_with_context, current_match_info)
+        # Update the results list in both search panels
+        if self._search_panel:
+            self._search_panel.update_results_list(results_with_context, current_match_info)
+        if hasattr(self, '_sidebar_search_panel'):
+            self._sidebar_search_panel.update_results_list(results_with_context, current_match_info)
     
     def _update_match_counter(self) -> None:
         """Update the match counter display."""

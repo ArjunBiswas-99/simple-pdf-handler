@@ -465,3 +465,7 @@ jsonc
   }
 }
 You can adapt this to XAML StaticResources, CSS variables, etc.
+
+- the left panel is not collapsible. ideally the pages, bookmarks, search and attachment buttons should behave like this. when each is clicked the corresponding content should show up, when the corresponding content is there in the panel and they are clicked again the panel must be collapsed. the user can click any of the options again to see the panel again.
+- none of the buttons on the left panel (pages, bookmarks, search and attachment buttons ) is showing correctly they are getting truncated from the left and right.
+- search functionality is already implemented you can add the same contents when clicked on search

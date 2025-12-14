@@ -15,18 +15,23 @@ GNU General Public License for more details.
 """
 
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QObject, pyqtSignal
 from .themes import ThemeType
 from .stylesheets import generate_stylesheet
 
 
-class ThemeManager:
+class ThemeManager(QObject):
     """
     Manages application themes and provides theme switching functionality.
     Centralizes theme application across the entire application.
     """
     
+    # Signal emitted when theme changes
+    theme_changed = pyqtSignal(ThemeType)
+    
     def __init__(self):
         """Initialize the theme manager with default light theme."""
+        super().__init__()
         self._current_theme = ThemeType.LIGHT
         self._app = None
     
@@ -65,7 +70,12 @@ class ThemeManager:
         self._app.setStyleSheet(stylesheet)
         
         # Update current theme
+        old_theme = self._current_theme
         self._current_theme = theme_type
+        
+        # Emit signal if theme actually changed
+        if old_theme != theme_type:
+            self.theme_changed.emit(theme_type)
     
     def toggle_theme(self) -> ThemeType:
         """
