@@ -44,11 +44,11 @@ class SidebarIconRail(QWidget):
         layout.setSpacing(SPACING['xs'])
         self.setLayout(layout)
         
-        # Create icon buttons
-        self._create_icon_button(SidebarMode.PAGES, "📄", "Pages", layout)
-        self._create_icon_button(SidebarMode.BOOKMARKS, "🔖", "Bookmarks", layout)
-        self._create_icon_button(SidebarMode.SEARCH, "🔍", "Search", layout)
-        self._create_icon_button(SidebarMode.ATTACHMENTS, "📎", "Attachments", layout)
+        # Create icon buttons with professional Unicode symbols
+        self._create_icon_button(SidebarMode.PAGES, "☰", "Pages", layout)
+        self._create_icon_button(SidebarMode.BOOKMARKS, "★", "Bookmarks", layout)
+        self._create_icon_button(SidebarMode.SEARCH, "⌕", "Search", layout)
+        self._create_icon_button(SidebarMode.ATTACHMENTS, "◉", "Attachments", layout)
         
         # Add stretch to push buttons to top
         layout.addStretch()

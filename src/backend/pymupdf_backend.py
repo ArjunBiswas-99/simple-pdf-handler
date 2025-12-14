@@ -325,3 +325,83 @@ class PyMuPDFBackend:
         except Exception as e:
             print(f"Error extracting words from page {page_number}: {e}")
             return []
+    
+    def get_metadata(self) -> dict:
+        """
+        Extract PDF metadata (title, author, subject, etc.).
+        
+        Returns:
+            Dictionary containing metadata fields, or empty dict if no document loaded
+        """
+        if not self._document:
+            return {}
+        
+        try:
+            # PyMuPDF provides metadata as a dictionary
+            metadata = self._document.metadata
+            
+            # Return cleaned metadata (remove None values, strip whitespace)
+            result = {}
+            for key, value in metadata.items():
+                if value and isinstance(value, str):
+                    cleaned = value.strip()
+                    if cleaned:
+                        result[key] = cleaned
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error extracting metadata: {e}")
+            return {}
+    
+    def get_bookmarks(self) -> List[Tuple[int, str, int]]:
+        """
+        Extract bookmarks/outline (table of contents) from PDF.
+        
+        Returns:
+            List of (level, title, page_number) tuples where:
+            - level: Indentation level (1 for top level, 2 for nested, etc.)
+            - title: Bookmark title text
+            - page_number: Target page number (0-indexed)
+            Returns empty list if no bookmarks or document not loaded
+        """
+        if not self._document:
+            return []
+        
+        try:
+            # Get table of contents from PyMuPDF
+            # Returns list of [level, title, page_num, ...] lists
+            toc = self._document.get_toc()
+            
+            if not toc:
+                return []
+            
+            # Convert to simpler tuple format
+            bookmarks = []
+            for item in toc:
+                if len(item) >= 3:
+                    level = item[0]
+                    title = item[1]
+                    page_num = item[2] - 1  # Convert from 1-indexed to 0-indexed
+                    
+                    # Validate page number
+                    if 0 <= page_num < self._document.page_count:
+                        bookmarks.append((level, title, page_num))
+            
+            return bookmarks
+            
+        except Exception as e:
+            print(f"Error extracting bookmarks: {e}")
+            return []
+    
+    def get_attachments(self) -> List[dict]:
+        """
+        Get list of file attachments embedded in PDF.
+        
+        Returns:
+            List of attachment info dictionaries (future implementation)
+            Empty list for now (stub for future feature)
+        """
+        # Stub for future implementation
+        # Will return list of dicts with keys: name, size, type, data
+        return []

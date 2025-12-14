@@ -92,8 +92,8 @@ class AppBar(QWidget):
         Args:
             layout: Main horizontal layout to add to
         """
-        # Theme toggle button
-        self._theme_btn = QPushButton("🌓")
+        # Theme toggle button with better icon
+        self._theme_btn = QPushButton("◐")
         self._theme_btn.setToolTip("Toggle theme")
         self._theme_btn.setFixedSize(SIZING['icon_button_size'], SIZING['icon_button_size'])
         self._theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -101,7 +101,7 @@ class AppBar(QWidget):
         layout.addWidget(self._theme_btn)
         
         # Settings button (grayed out - coming soon)
-        self._settings_btn = QPushButton("⚙️")
+        self._settings_btn = QPushButton("⚙")
         self._settings_btn.setToolTip("Settings (Coming soon)")
         self._settings_btn.setFixedSize(SIZING['icon_button_size'], SIZING['icon_button_size'])
         self._settings_btn.setEnabled(False)
@@ -109,7 +109,7 @@ class AppBar(QWidget):
         layout.addWidget(self._settings_btn)
         
         # Help button
-        self._help_btn = QPushButton("?")
+        self._help_btn = QPushButton("ⓘ")
         self._help_btn.setToolTip("Help & About")
         self._help_btn.setFixedSize(SIZING['icon_button_size'], SIZING['icon_button_size'])
         self._help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
