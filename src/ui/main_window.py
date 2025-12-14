@@ -102,10 +102,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Simple PDF Handler")
         self.setMinimumSize(1000, 700)
         
-        # Apply professional stylesheet with enhancements
+        # Apply modern polish styles (MS Word-inspired)
+        from ui.styles.modern_polish_styles import ModernPolishStyles
         base_styles = ProfessionalStyles.get_complete_stylesheet()
         enhanced_styles = EnhancedStyles.get_complete_enhanced_stylesheet()
-        self.setStyleSheet(base_styles + "\n" + enhanced_styles)
+        modern_styles = ModernPolishStyles.get_complete_modern_stylesheet()
+        self.setStyleSheet(base_styles + "\n" + enhanced_styles + "\n" + modern_styles)
         
         # Create main container widget with vertical layout
         main_container = QWidget()
@@ -843,12 +845,10 @@ class MainWindow(QMainWindow):
         theme_manager = get_theme_manager()
         new_theme = theme_manager.toggle_theme()
         
-        # Update menu action text
+        # Show status message
         if new_theme == ThemeType.DARK:
-            self._theme_action.setText("☀️ Switch to Light Theme")
             self._status_bar.showMessage("Dark theme activated")
         else:
-            self._theme_action.setText("🌓 Switch to Dark Theme")
             self._status_bar.showMessage("Light theme activated")
         
         # Update canvas background color based on theme
