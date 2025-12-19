@@ -711,6 +711,164 @@ class PyMuPDFBackend:
             print(f"Error deleting annotation {annot_xref} from page {page_number}: {e}")
             return False
     
+    def delete_page(self, page_number: int) -> tuple[bool, bytes]:
+        """
+        Delete a page from the PDF document.
+        Captures page data before deletion for undo support.
+        Cannot delete the last remaining page.
+        
+        Args:
+            page_number: Page number to delete (0-indexed)
+            
+        Returns:
+            Tuple of (success, page_data) where:
+            - success: True if deletion succeeded, False otherwise
+            - page_data: Serialized page data as bytes for undo, or None if failed
+        """
+        if not self._document:
+            return (False, None)
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return (False, None)
+        
+        # Prevent deletion of last page
+        if self._document.page_count == 1:
+            print("Cannot delete the last page of the document")
+            return (False, None)
+        
+        try:
+            # Create temporary in-memory PDF to store the page
+            temp_doc = fitz.open()
+            
+            # Copy the page to temp doc BEFORE deletion
+            temp_doc.insert_pdf(
+                self._document,
+                from_page=page_number,
+                to_page=page_number
+            )
+            
+            # Serialize the temp doc to bytes for storage
+            page_data = temp_doc.tobytes()
+            
+            # Close temp doc (releases memory)
+            temp_doc.close()
+            
+            # Now delete the page from main document
+            self._document.delete_page(page_number)
+            
+            return (True, page_data)
+            
+        except Exception as e:
+            print(f"Error deleting page {page_number}: {e}")
+            return (False, None)
+    
+    def restore_page(self, position: int, page_data: bytes) -> bool:
+        """
+        Restore a previously deleted page from serialized data.
+        Used for undo operations to restore complete page content.
+        
+        Args:
+            position: Position to restore page at (0-indexed)
+            page_data: Serialized page data as bytes (from delete_page)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if not page_data:
+            return False
+        
+        # Validate position (can insert at end, so allow position == page_count)
+        if position < 0 or position > self._document.page_count:
+            return False
+        
+        try:
+            # Load temp PDF from bytes (in memory, no files)
+            temp_doc = fitz.open(stream=page_data, filetype="pdf")
+            
+            # Insert the saved page back into main document
+            # start_at parameter specifies where to insert
+            self._document.insert_pdf(
+                temp_doc,
+                from_page=0,
+                to_page=0,
+                start_at=position
+            )
+            
+            # Close temp doc (releases memory)
+            temp_doc.close()
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error restoring page at position {position}: {e}")
+            return False
+    
+    def insert_blank_page(self, position: int, width: float = 595, height: float = 842) -> bool:
+        """
+        Insert a blank page at the specified position.
+        Uses A4 size by default (595 x 842 points).
+        
+        Args:
+            position: Position to insert page (0-indexed, page will be inserted before this position)
+            width: Page width in points (default: A4 width)
+            height: Page height in points (default: A4 height)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        # Validate position (can insert at end, so allow position == page_count)
+        if position < 0 or position > self._document.page_count:
+            return False
+        
+        try:
+            # Insert blank page at position
+            # PyMuPDF's insert_page creates a page before the given position
+            self._document.insert_page(position, width=width, height=height)
+            return True
+        except Exception as e:
+            print(f"Error inserting blank page at position {position}: {e}")
+            return False
+    
+    def move_page(self, from_page: int, to_page: int) -> bool:
+        """
+        Move a page from one position to another (reorder pages).
+        
+        Args:
+            from_page: Source page number (0-indexed)
+            to_page: Destination page number (0-indexed)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        page_count = self._document.page_count
+        
+        # Validate page numbers
+        if from_page < 0 or from_page >= page_count:
+            return False
+        if to_page < 0 or to_page >= page_count:
+            return False
+        
+        # Nothing to do if same position
+        if from_page == to_page:
+            return True
+        
+        try:
+            # PyMuPDF's move_page moves a page to before the target position
+            self._document.move_page(from_page, to_page)
+            return True
+        except Exception as e:
+            print(f"Error moving page from {from_page} to {to_page}: {e}")
+            return False
+    
     def save_pdf(self, output_path: str) -> bool:
         """
         Save the PDF to a file.

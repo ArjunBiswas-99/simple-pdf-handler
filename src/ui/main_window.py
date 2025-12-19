@@ -312,6 +312,9 @@ class MainWindow(QMainWindow):
         
         # Connect pages panel signals
         pages_panel.page_clicked.connect(self._on_page_thumbnail_clicked)
+        pages_panel.delete_page_requested.connect(self._on_delete_page_requested)
+        pages_panel.insert_page_requested.connect(self._on_insert_page_requested)
+        pages_panel.move_page_requested.connect(self._on_move_page_requested)
         
         # Connect search panel signals
         search_panel.search_requested.connect(self._on_search_requested)
@@ -352,18 +355,12 @@ class MainWindow(QMainWindow):
         # Connect edit tools signals
         edit_tools_panel.add_text_clicked.connect(self._on_add_text)
         edit_tools_panel.add_image_clicked.connect(self._on_add_image)
-        edit_tools_panel.add_page_clicked.connect(self._on_add_page)
+        edit_tools_panel.add_blank_page_clicked.connect(self._on_add_blank_page)
         edit_tools_panel.attach_file_clicked.connect(self._on_attach_file)
+        edit_tools_panel.edit_text_clicked.connect(self._on_edit_text)
         edit_tools_panel.undo_clicked.connect(self._on_undo)
         edit_tools_panel.redo_clicked.connect(self._on_redo)
-        edit_tools_panel.select_object_clicked.connect(self._on_select_object)
-        edit_tools_panel.edit_text_clicked.connect(self._on_edit_text)
-        edit_tools_panel.edit_image_clicked.connect(self._on_edit_image)
-        edit_tools_panel.delete_object_clicked.connect(self._on_delete_object)
-        edit_tools_panel.bring_forward_clicked.connect(self._on_bring_forward)
-        edit_tools_panel.send_backward_clicked.connect(self._on_send_backward)
-        edit_tools_panel.bring_to_front_clicked.connect(self._on_bring_to_front)
-        edit_tools_panel.send_to_back_clicked.connect(self._on_send_to_back)
+        edit_tools_panel.edit_pages_toggled.connect(self._on_edit_pages_toggled)
         
         # Connect undo manager signals - CRITICAL: This enables/disables buttons
         self._undo_manager.can_undo_changed.connect(edit_tools_panel.set_undo_enabled)
@@ -415,11 +412,16 @@ class MainWindow(QMainWindow):
         # Switch right sidebar to Edit Tools panel (index 1)
         self._right_sidebar.set_active_panel(1)
         
-        # Enable edit tools
+        # Enable edit tools (document is open)
         if hasattr(self, '_edit_tools_panel'):
             self._edit_tools_panel.set_tools_enabled(True)
         
         self._status_bar.showMessage("Edit mode active - Use right panel tools to edit PDF", 3000)
+    
+    def _disable_edit_tools(self) -> None:
+        """Disable all edit tools when no document is open."""
+        if hasattr(self, '_edit_tools_panel'):
+            self._edit_tools_panel.set_tools_enabled(False)
     
     def _exit_edit_mode(self) -> None:
         """
@@ -525,6 +527,33 @@ class MainWindow(QMainWindow):
     
     def _on_open_file(self) -> None:
         """Handle file open action."""
+        # Check if current document has unsaved changes
+        if self._document.is_open():
+            state_manager = self._document.get_state_manager()
+            
+            if state_manager.is_dirty():
+                # Document has unsaved changes - ask user
+                file_path = self._document.get_file_path()
+                file_name = os.path.basename(file_path) if file_path else "Untitled"
+                
+                reply = QMessageBox.question(
+                    self,
+                    "Unsaved Changes",
+                    f"Do you want to save changes to \"{file_name}\" before opening a new file?",
+                    QMessageBox.StandardButton.Save | 
+                    QMessageBox.StandardButton.Discard | 
+                    QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Save
+                )
+                
+                if reply == QMessageBox.StandardButton.Save:
+                    # Save current document first
+                    self._on_save()
+                elif reply == QMessageBox.StandardButton.Cancel:
+                    # User cancelled - don't open new file
+                    return
+                # If Discard, continue with opening new file
+        
         # Get settings manager to retrieve last directory
         settings = get_settings_manager()
         last_dir = settings.get_last_open_directory()
@@ -675,6 +704,12 @@ class MainWindow(QMainWindow):
         # Load bookmarks into sidebar
         self._load_bookmarks()
         
+        # Reset Edit Pages mode to off when new document is loaded
+        if hasattr(self, '_edit_tools_panel'):
+            self._edit_tools_panel.exit_pages_edit_mode()
+        if hasattr(self, '_pages_panel'):
+            self._pages_panel.set_edit_mode(False)
+        
         # Initialize pages panel with page count
         self._load_pages_panel()
         
@@ -700,6 +735,9 @@ class MainWindow(QMainWindow):
             # Disable Save/Save As buttons
             self._view_toolbar.set_save_enabled(False)
             self._view_toolbar.set_save_as_enabled(False)
+            
+            # Disable edit tools when no document is open
+            self._disable_edit_tools()
             
             # Clear bookmarks
             if hasattr(self, '_bookmarks_panel'):
@@ -2332,6 +2370,25 @@ class MainWindow(QMainWindow):
         """
         self._status_bar.showMessage(f"Thumbnail rendering failed: {error_message}")
     
+    def _refresh_page_thumbnail(self, page_number: int) -> None:
+        """
+        Re-render a specific page's thumbnail to show recent changes.
+        Used for live updates after edits.
+        
+        Args:
+            page_number: Page number to refresh (0-indexed)
+        """
+        if not self._document.is_open() or not hasattr(self, '_pages_panel'):
+            return
+        
+        # Render thumbnail at 25% scale
+        thumbnail_scale = 0.25
+        pixmap = self._document._backend.render_page(page_number, thumbnail_scale)
+        
+        if pixmap:
+            # Update the thumbnail in pages panel
+            self._pages_panel.set_thumbnail(page_number, pixmap)
+    
     def _update_pages_panel_selection(self) -> None:
         """Update pages panel to highlight current page."""
         if not self._document.is_open() or not hasattr(self, '_pages_panel'):
@@ -2652,8 +2709,11 @@ class MainWindow(QMainWindow):
             # Add to document's object collection
             self._document.get_objects().add(text_obj)
             
-            # Re-render the page to show new text
+            # Re-render the page to show new text in main canvas
             self._render_current_view()
+            
+            # LIVE UPDATE: Re-render the thumbnail for this page
+            self._refresh_page_thumbnail(page_num)
             
             self._status_bar.showMessage(f"Text added to page {page_num + 1}", 2000)
         else:
@@ -2684,45 +2744,209 @@ class MainWindow(QMainWindow):
         """Handle Add Image button click from Edit Tools panel."""
         self._status_bar.showMessage("Add Image - Coming in Phase 3", 2000)
     
-    def _on_add_page(self) -> None:
-        """Handle Add Page button click from Edit Tools panel."""
-        self._status_bar.showMessage("Add Page - Coming in Phase 3", 2000)
+    def _on_add_blank_page(self) -> None:
+        """
+        Handle Add Blank Page button click.
+        Inserts a blank A4 page at the end of the document.
+        """
+        if not self._document.is_open():
+            self._status_bar.showMessage("Please open a PDF first", 2000)
+            return
+        
+        # Insert blank page at end
+        page_count = self._document.get_page_count()
+        success = self._document._backend.insert_blank_page(page_count)
+        
+        if success:
+            # Mark document as dirty
+            self._document.get_state_manager().mark_dirty()
+            
+            # Record undo action
+            from core.undo_manager import InsertPageAction
+            action = InsertPageAction(page_count)
+            self._undo_manager.record_action(action)
+            
+            # Reload pages panel to show new page
+            self._load_pages_panel()
+            
+            # Re-render current view
+            self._render_current_view()
+            
+            self._status_bar.showMessage(f"Added blank page {page_count + 1}", 2000)
+        else:
+            self._show_error("Failed to add blank page")
     
     def _on_attach_file(self) -> None:
         """Handle Attach File button click from Edit Tools panel."""
         self._status_bar.showMessage("Attach File - Coming in Phase 3", 2000)
     
-    def _on_select_object(self) -> None:
-        """Handle Select Object button click from Edit Tools panel."""
-        self._status_bar.showMessage("Select Object - Coming soon", 2000)
-    
     def _on_edit_text(self) -> None:
         """Handle Edit Text button click from Edit Tools panel."""
         self._status_bar.showMessage("Edit Text - Coming soon", 2000)
     
-    def _on_edit_image(self) -> None:
-        """Handle Edit Image button click from Edit Tools panel."""
-        self._status_bar.showMessage("Edit Image - Coming in Phase 3", 2000)
+    def _on_edit_pages_toggled(self, enabled: bool) -> None:
+        """
+        Handle Edit Pages mode toggle.
+        Shows/hides page editing controls on thumbnails.
+        
+        Args:
+            enabled: True when entering edit mode, False when exiting
+        """
+        if not self._document.is_open():
+            return
+        
+        # Update pages panel edit mode
+        if hasattr(self, '_pages_panel'):
+            self._pages_panel.set_edit_mode(enabled)
+        
+        # Switch to pages panel if entering edit mode
+        if enabled:
+            self._new_sidebar.set_mode(SidebarMode.PAGES)
+            if self._new_sidebar.is_collapsed():
+                self._new_sidebar.expand()
+            self._status_bar.showMessage("Page editing active - Use overlay buttons or drag to reorder", 0)
+        else:
+            self._status_bar.showMessage("Page editing disabled", 2000)
     
-    def _on_delete_object(self) -> None:
-        """Handle Delete button click from Edit Tools panel."""
-        self._status_bar.showMessage("Delete Object - Coming soon", 2000)
+    def _on_delete_page_requested(self, page_number: int) -> None:
+        """
+        Handle delete page request from pages panel overlay button.
+        
+        Args:
+            page_number: Page to delete (0-indexed)
+        """
+        if not self._document.is_open():
+            return
+        
+        page_count = self._document.get_page_count()
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Page",
+            f"Are you sure you want to delete page {page_number + 1}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Check if edit mode is currently active
+        edit_mode_active = False
+        if hasattr(self, '_pages_panel'):
+            edit_mode_active = self._pages_panel._edit_mode
+        
+        # Perform deletion (returns success and page data for undo)
+        success, page_data = self._document._backend.delete_page(page_number)
+        
+        if success:
+            # Mark document as dirty
+            self._document.get_state_manager().mark_dirty()
+            
+            # Record undo action with captured page data
+            from core.undo_manager import DeletePageAction
+            action = DeletePageAction(page_number, page_data)
+            self._undo_manager.record_action(action)
+            
+            # Reload pages panel
+            self._load_pages_panel()
+            
+            # Restore edit mode if it was active
+            if edit_mode_active and hasattr(self, '_pages_panel'):
+                self._pages_panel.set_edit_mode(True)
+            
+            # Adjust current page if needed
+            if page_number <= self._document.get_current_page():
+                new_page = max(0, self._document.get_current_page() - 1)
+                self._document.set_current_page(new_page)
+            
+            # Re-render view
+            self._render_current_view()
+            
+            self._status_bar.showMessage(f"Deleted page {page_number + 1}", 2000)
+        else:
+            self._show_error("Failed to delete page")
     
-    def _on_bring_forward(self) -> None:
-        """Handle Bring Forward button click from Edit Tools panel."""
-        self._status_bar.showMessage("Bring Forward - Coming soon", 2000)
+    def _on_insert_page_requested(self, position: int) -> None:
+        """
+        Handle insert page request from pages panel overlay button.
+        Inserts a blank page at the specified position.
+        
+        Args:
+            position: Position to insert blank page before (0-indexed)
+        """
+        if not self._document.is_open():
+            return
+        
+        # Check if edit mode is currently active
+        edit_mode_active = False
+        if hasattr(self, '_pages_panel'):
+            edit_mode_active = self._pages_panel._edit_mode
+        
+        # Insert blank page
+        success = self._document._backend.insert_blank_page(position)
+        
+        if success:
+            # Mark document as dirty
+            self._document.get_state_manager().mark_dirty()
+            
+            # Record undo action
+            from core.undo_manager import InsertPageAction
+            action = InsertPageAction(position)
+            self._undo_manager.record_action(action)
+            
+            # Reload pages panel
+            self._load_pages_panel()
+            
+            # Restore edit mode if it was active
+            if edit_mode_active and hasattr(self, '_pages_panel'):
+                self._pages_panel.set_edit_mode(True)
+            
+            # Re-render view
+            self._render_current_view()
+            
+            self._status_bar.showMessage(f"Inserted blank page at position {position + 1}", 2000)
+        else:
+            self._show_error("Failed to insert page")
     
-    def _on_send_backward(self) -> None:
-        """Handle Send Backward button click from Edit Tools panel."""
-        self._status_bar.showMessage("Send Backward - Coming soon", 2000)
-    
-    def _on_bring_to_front(self) -> None:
-        """Handle Bring to Front button click from Edit Tools panel."""
-        self._status_bar.showMessage("Bring to Front - Coming soon", 2000)
-    
-    def _on_send_to_back(self) -> None:
-        """Handle Send to Back button click from Edit Tools panel."""
-        self._status_bar.showMessage("Send to Back - Coming soon", 2000)
+    def _on_move_page_requested(self, from_page: int, to_page: int) -> None:
+        """
+        Handle move page request from pages panel drag-and-drop.
+        Reorders pages in the document.
+        
+        Args:
+            from_page: Source page number (0-indexed)
+            to_page: Destination page number (0-indexed)
+        """
+        if not self._document.is_open():
+            return
+        
+        # Perform move
+        success = self._document._backend.move_page(from_page, to_page)
+        
+        if success:
+            # Mark document as dirty
+            self._document.get_state_manager().mark_dirty()
+            
+            # Record undo action
+            from core.undo_manager import MovePageAction
+            action = MovePageAction(from_page, to_page)
+            self._undo_manager.record_action(action)
+            
+            # Update page numbers on thumbnails
+            if hasattr(self, '_pages_panel'):
+                self._pages_panel.update_page_numbers_after_reorder()
+            
+            # Reload thumbnail rendering to reflect new order
+            self._start_thumbnail_rendering()
+            
+            # Re-render view
+            self._render_current_view()
+            
+            self._status_bar.showMessage(f"Moved page {from_page + 1} to position {to_page + 1}", 2000)
+        else:
+            self._show_error("Failed to move page")
     
     def _on_undo(self) -> None:
         """Handle undo request (Ctrl+Z or button click)."""
@@ -2733,12 +2957,25 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage("Nothing to undo", 1000)
             return
         
+        # Check if edit mode is currently active
+        edit_mode_active = False
+        if hasattr(self, '_pages_panel'):
+            edit_mode_active = self._pages_panel._edit_mode
+        
         # Perform undo
         page_num = self._undo_manager.undo(self._document._backend)
         
         if page_num is not None:
+            # Reload pages panel to update thumbnails
+            self._load_pages_panel()
+            
+            # Restore edit mode if it was active
+            if edit_mode_active and hasattr(self, '_pages_panel'):
+                self._pages_panel.set_edit_mode(True)
+            
             # Re-render the affected page
             self._render_current_view()
+            
             self._status_bar.showMessage("Undo successful", 2000)
         else:
             self._status_bar.showMessage("Undo failed", 2000)

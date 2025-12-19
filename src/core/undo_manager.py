@@ -133,6 +133,156 @@ class AddTextAction(UndoAction):
         return self._page_number
 
 
+class DeletePageAction(UndoAction):
+    """
+    Action representing deletion of a page from PDF.
+    Stores complete page data for full restoration on undo.
+    """
+    
+    def __init__(self, page_number: int, page_data: Optional[bytes] = None):
+        """
+        Initialize delete page action.
+        
+        Args:
+            page_number: Page number that was deleted (0-indexed)
+            page_data: Serialized page data for restoration (captured during deletion)
+        """
+        self._page_number = page_number
+        self._page_data = page_data
+    
+    def set_page_data(self, data: bytes) -> None:
+        """
+        Store page data after deletion for undo.
+        
+        Args:
+            data: Serialized page content as bytes
+        """
+        self._page_data = data
+    
+    def undo(self, backend) -> bool:
+        """
+        Restore the deleted page with complete content.
+        Uses stored page data to restore exact page state.
+        """
+        if not self._page_data:
+            print("Cannot undo: No page data stored")
+            return False
+        
+        # Restore page from serialized data
+        return backend.restore_page(self._page_number, self._page_data)
+    
+    def redo(self, backend) -> bool:
+        """
+        Re-delete the page.
+        Captures page data again for potential future undo.
+        """
+        success, new_page_data = backend.delete_page(self._page_number)
+        
+        if success:
+            # Update stored data with newly captured data
+            self._page_data = new_page_data
+        
+        return success
+    
+    def get_description(self) -> str:
+        """Get action description."""
+        return f"Delete page {self._page_number + 1}"
+    
+    def get_page_number(self) -> int:
+        """Get the page number this action affects."""
+        return self._page_number
+
+
+class InsertPageAction(UndoAction):
+    """Action representing insertion of a blank page."""
+    
+    def __init__(self, position: int, width: float = 595, height: float = 842):
+        """
+        Initialize insert page action.
+        
+        Args:
+            position: Position where page was inserted (0-indexed)
+            width: Page width in points
+            height: Page height in points
+        """
+        self._position = position
+        self._width = width
+        self._height = height
+    
+    def undo(self, backend) -> bool:
+        """Remove the inserted page."""
+        return backend.delete_page(self._position)
+    
+    def redo(self, backend) -> bool:
+        """Re-insert the blank page."""
+        return backend.insert_blank_page(self._position, self._width, self._height)
+    
+    def get_description(self) -> str:
+        """Get action description."""
+        return f"Insert blank page at position {self._position + 1}"
+    
+    def get_page_number(self) -> int:
+        """Get the page number this action affects."""
+        return self._position
+
+
+class MovePageAction(UndoAction):
+    """
+    Action representing moving a page to a new position.
+    Handles complex undo logic for page reordering.
+    """
+    
+    def __init__(self, from_page: int, to_page: int):
+        """
+        Initialize move page action.
+        
+        Args:
+            from_page: Original page position (0-indexed)
+            to_page: New page position (0-indexed)
+        """
+        self._from_page = from_page
+        self._to_page = to_page
+        
+        # Calculate where the page actually ends up after the move
+        # PyMuPDF's move_page behavior: moves page to BEFORE to_page position
+        # If moving forward: page ends up at to_page - 1
+        # If moving backward: page ends up at to_page
+        if from_page < to_page:
+            self._actual_position = to_page - 1
+        else:
+            self._actual_position = to_page
+    
+    def undo(self, backend) -> bool:
+        """
+        Move page back to original position.
+        Must account for PyMuPDF's move behavior.
+        """
+        # To undo: move from current position back to original
+        # If original move was forward, we need to move backward
+        # If original move was backward, we need to move forward
+        
+        if self._from_page < self._to_page:
+            # Was moved forward, now move backward
+            # Page is currently at to_page-1, move it back to from_page
+            return backend.move_page(self._actual_position, self._from_page)
+        else:
+            # Was moved backward, now move forward
+            # Page is currently at to_page, move it to from_page+1 (to get back to from_page)
+            return backend.move_page(self._actual_position, self._from_page + 1)
+    
+    def redo(self, backend) -> bool:
+        """Re-apply the page move."""
+        return backend.move_page(self._from_page, self._to_page)
+    
+    def get_description(self) -> str:
+        """Get action description."""
+        return f"Move page {self._from_page + 1} to position {self._to_page + 1}"
+    
+    def get_page_number(self) -> int:
+        """Get the page number this action affects."""
+        return self._actual_position
+
+
 class UndoManager(QObject):
     """
     Manages undo and redo stacks for edit operations.

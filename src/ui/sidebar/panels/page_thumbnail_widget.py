@@ -9,7 +9,7 @@ the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import pyqtSignal, Qt, QSize
 from PyQt6.QtGui import QPixmap, QPainter, QColor
 from ui.styles.design_tokens import get_color
@@ -19,10 +19,16 @@ from ui.styles.theme_manager import get_theme_manager
 class PageThumbnailWidget(QWidget):
     """
     Widget displaying a single page thumbnail with page number.
-    Supports selected and hover states.
+    Supports selected state, hover effects, and edit mode with overlay buttons.
+    
+    In edit mode, displays red (delete) and yellow (add) circular buttons
+    for page management operations.
     """
     
+    # Signals
     clicked = pyqtSignal(int)  # Emits page number when clicked
+    delete_page_requested = pyqtSignal(int)  # Emits page number to delete
+    add_page_above_requested = pyqtSignal(int)  # Emits position to insert page before
     
     def __init__(self, page_number: int, parent=None):
         """
@@ -37,6 +43,11 @@ class PageThumbnailWidget(QWidget):
         self._is_selected = False
         self._thumbnail_pixmap = None
         self._is_loading = True
+        self._edit_mode = False
+        
+        # Overlay buttons (created on demand)
+        self._delete_button = None
+        self._add_button = None
         
         self._setup_ui()
         self._apply_theme()
@@ -104,7 +115,7 @@ class PageThumbnailWidget(QWidget):
             self._thumbnail_label.setPixmap(scaled)
             self._thumbnail_pixmap = pixmap
             self._is_loading = False
-            self.update()  # Trigger repaint for border
+            self.update()
     
     def set_selected(self, selected: bool) -> None:
         """
@@ -115,7 +126,105 @@ class PageThumbnailWidget(QWidget):
         """
         if self._is_selected != selected:
             self._is_selected = selected
-            self._apply_theme()  # Update styling
+            self._apply_theme()
+    
+    def set_edit_mode(self, enabled: bool) -> None:
+        """
+        Enable or disable edit mode.
+        Shows/hides overlay buttons for page operations.
+        
+        Args:
+            enabled: True to show edit controls, False to hide
+        """
+        self._edit_mode = enabled
+        
+        if enabled:
+            self._create_overlay_buttons()
+        else:
+            self._remove_overlay_buttons()
+    
+    def _create_overlay_buttons(self) -> None:
+        """Create and position overlay buttons for edit mode."""
+        if self._delete_button or self._add_button:
+            return  # Already created
+        
+        # Delete button (red circle with X) - top right
+        self._delete_button = QPushButton("×", self)
+        self._delete_button.setFixedSize(28, 28)
+        self._delete_button.setToolTip("Delete this page")
+        self._delete_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._delete_button.setStyleSheet("""
+            QPushButton {
+                background-color: #DC3545;
+                border: 2px solid white;
+                border-radius: 14px;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #C82333;
+                transform: scale(1.1);
+            }
+            QPushButton:pressed {
+                background-color: #BD2130;
+            }
+        """)
+        
+        # Position in top-right corner
+        self._delete_button.move(118, 6)
+        self._delete_button.clicked.connect(self._on_delete_clicked)
+        self._delete_button.show()
+        self._delete_button.raise_()
+        
+        # Add page button (yellow circle with +) - top left
+        self._add_button = QPushButton("+", self)
+        self._add_button.setFixedSize(28, 28)
+        self._add_button.setToolTip("Add blank page above this page")
+        self._add_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._add_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FFC107;
+                border: 2px solid white;
+                border-radius: 14px;
+                color: white;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #FFB300;
+                transform: scale(1.1);
+            }
+            QPushButton:pressed {
+                background-color: #FFA000;
+            }
+        """)
+        
+        # Position in top-left corner
+        self._add_button.move(6, 6)
+        self._add_button.clicked.connect(self._on_add_clicked)
+        self._add_button.show()
+        self._add_button.raise_()
+    
+    def _remove_overlay_buttons(self) -> None:
+        """Remove overlay buttons when exiting edit mode."""
+        if self._delete_button:
+            self._delete_button.deleteLater()
+            self._delete_button = None
+        
+        if self._add_button:
+            self._add_button.deleteLater()
+            self._add_button = None
+    
+    def _on_delete_clicked(self) -> None:
+        """Handle delete button click."""
+        self.delete_page_requested.emit(self._page_number)
+    
+    def _on_add_clicked(self) -> None:
+        """Handle add page button click."""
+        self.add_page_above_requested.emit(self._page_number)
     
     def is_selected(self) -> bool:
         """Check if thumbnail is selected."""
@@ -125,14 +234,30 @@ class PageThumbnailWidget(QWidget):
         """Get the page number for this thumbnail."""
         return self._page_number
     
+    def update_page_number(self, new_number: int) -> None:
+        """
+        Update the page number after reordering.
+        
+        Args:
+            new_number: New page number (0-indexed)
+        """
+        self._page_number = new_number
+        self._page_label.setText(f"Page {new_number + 1}")
+    
     def is_loading(self) -> bool:
         """Check if thumbnail is still loading."""
         return self._is_loading
     
     def mousePressEvent(self, event):
-        """Handle mouse click."""
+        """Handle mouse click - only for thumbnail selection, not overlay buttons."""
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self._page_number)
+            # Check if click is on overlay buttons
+            if self._edit_mode and (self._delete_button or self._add_button):
+                # Let overlay buttons handle their own clicks
+                # Don't emit clicked signal if overlay button will handle it
+                pass
+            else:
+                self.clicked.emit(self._page_number)
         super().mousePressEvent(event)
     
     def enterEvent(self, event):
