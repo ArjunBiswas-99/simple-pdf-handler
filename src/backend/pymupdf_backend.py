@@ -869,6 +869,250 @@ class PyMuPDFBackend:
             print(f"Error moving page from {from_page} to {to_page}: {e}")
             return False
     
+    def add_rectangle_shape(
+        self,
+        page_number: int,
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        border_color: Tuple[float, float, float],
+        border_width: float,
+        fill_color: Optional[Tuple[float, float, float, float]] = None
+    ) -> bool:
+        """
+        Draw a rectangle shape on a PDF page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            x0, y0: Top-left corner coordinates
+            x1, y1: Bottom-right corner coordinates
+            border_color: RGB border color tuple (0.0-1.0 range)
+            border_width: Border width in points
+            fill_color: RGBA fill color tuple (0.0-1.0 range), None for no fill
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return False
+        
+        try:
+            page = self._document[page_number]
+            
+            # Create rectangle
+            rect = fitz.Rect(x0, y0, x1, y1)
+            
+            # Draw rectangle with border and fill
+            # Use opacity from alpha channel if provided
+            fill_rgb = fill_color[:3] if fill_color else None
+            fill_opacity = fill_color[3] if fill_color and len(fill_color) > 3 else 1.0
+            
+            page.draw_rect(
+                rect,
+                color=border_color,
+                width=border_width,
+                fill=fill_rgb,
+                fill_opacity=fill_opacity,
+                overlay=True
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error drawing rectangle on page {page_number}: {e}")
+            return False
+    
+    def add_circle_shape(
+        self,
+        page_number: int,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        border_color: Tuple[float, float, float],
+        border_width: float,
+        fill_color: Optional[Tuple[float, float, float, float]] = None
+    ) -> bool:
+        """
+        Draw a circle shape on a PDF page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            center_x, center_y: Circle center coordinates
+            radius: Circle radius in points
+            border_color: RGB border color tuple (0.0-1.0 range)
+            border_width: Border width in points
+            fill_color: RGBA fill color tuple (0.0-1.0 range), None for no fill
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return False
+        
+        try:
+            page = self._document[page_number]
+            
+            # Create center point
+            center = fitz.Point(center_x, center_y)
+            
+            # Draw circle with border and fill
+            # Use opacity from alpha channel if provided
+            fill_rgb = fill_color[:3] if fill_color else None
+            fill_opacity = fill_color[3] if fill_color and len(fill_color) > 3 else 1.0
+            
+            page.draw_circle(
+                center,
+                radius,
+                color=border_color,
+                width=border_width,
+                fill=fill_rgb,
+                fill_opacity=fill_opacity,
+                overlay=True
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error drawing circle on page {page_number}: {e}")
+            return False
+    
+    def add_line_shape(
+        self,
+        page_number: int,
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        color: Tuple[float, float, float],
+        width: float
+    ) -> bool:
+        """
+        Draw a line shape on a PDF page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            x0, y0: Start point coordinates
+            x1, y1: End point coordinates
+            color: RGB line color tuple (0.0-1.0 range)
+            width: Line width in points
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return False
+        
+        try:
+            page = self._document[page_number]
+            
+            # Create start and end points
+            start = fitz.Point(x0, y0)
+            end = fitz.Point(x1, y1)
+            
+            # Draw line
+            page.draw_line(
+                start,
+                end,
+                color=color,
+                width=width,
+                overlay=True
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error drawing line on page {page_number}: {e}")
+            return False
+    
+    def capture_page_snapshot(self, page_number: int) -> Optional[bytes]:
+        """
+        Capture current state of a page as serialized data.
+        Used for undo operations on content that can't be removed (shapes, etc.)
+        
+        Args:
+            page_number: Page number to snapshot (0-indexed)
+            
+        Returns:
+            Serialized page data as bytes, or None if failed
+        """
+        if not self._document:
+            return None
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return None
+        
+        try:
+            # Create temporary PDF with just this page
+            temp_doc = fitz.open()
+            temp_doc.insert_pdf(
+                self._document,
+                from_page=page_number,
+                to_page=page_number
+            )
+            
+            # Serialize to bytes
+            snapshot = temp_doc.tobytes()
+            temp_doc.close()
+            
+            return snapshot
+            
+        except Exception as e:
+            print(f"Error capturing page {page_number} snapshot: {e}")
+            return None
+    
+    def restore_page_from_snapshot(self, page_number: int, snapshot: bytes) -> bool:
+        """
+        Restore a page to a previous state from snapshot.
+        Deletes current page and replaces with snapshot version.
+        
+        Args:
+            page_number: Page number to restore (0-indexed)
+            snapshot: Serialized page data from capture_page_snapshot()
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return False
+        
+        if not snapshot:
+            return False
+        
+        try:
+            # Delete current page
+            self._document.delete_page(page_number)
+            
+            # Load snapshot as temp PDF
+            temp_doc = fitz.open(stream=snapshot, filetype="pdf")
+            
+            # Insert snapshot page at same position
+            self._document.insert_pdf(
+                temp_doc,
+                from_page=0,
+                to_page=0,
+                start_at=page_number
+            )
+            
+            temp_doc.close()
+            return True
+            
+        except Exception as e:
+            print(f"Error restoring page {page_number} from snapshot: {e}")
+            return False
+    
     def save_pdf(self, output_path: str) -> bool:
         """
         Save the PDF to a file.

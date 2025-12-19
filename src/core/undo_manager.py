@@ -283,6 +283,119 @@ class MovePageAction(UndoAction):
         return self._actual_position
 
 
+class AddShapeAction(UndoAction):
+    """
+    Action representing adding a shape to a PDF page.
+    Captures page state before drawing to enable undo.
+    """
+    
+    def __init__(self, shape_data: dict, page_snapshot: Optional[bytes] = None):
+        """
+        Initialize add shape action.
+        
+        Args:
+            shape_data: Dictionary containing shape type, coordinates, and properties
+            page_snapshot: Serialized page state before shape was drawn (for undo)
+        """
+        self._shape_data = shape_data
+        self._page_number = shape_data.get('page_number', 0)
+        self._page_snapshot = page_snapshot
+    
+    def set_page_snapshot(self, snapshot: bytes) -> None:
+        """
+        Store page snapshot after shape is drawn.
+        
+        Args:
+            snapshot: Serialized page state before drawing
+        """
+        self._page_snapshot = snapshot
+    
+    def undo(self, backend) -> bool:
+        """
+        Remove the shape by restoring page to state before drawing.
+        """
+        if not self._page_snapshot:
+            print("Cannot undo shape: No page snapshot available")
+            return False
+        
+        # Restore page from snapshot
+        return backend.restore_page_from_snapshot(self._page_number, self._page_snapshot)
+    
+    def redo(self, backend) -> bool:
+        """Re-add the shape."""
+        shape_type = self._shape_data.get('type')
+        page_num = self._shape_data.get('page_number')
+        props = self._shape_data.get('properties', {})
+        
+        # Convert QColor to RGB tuple (0-1 range)
+        border_color = props.get('border_color')
+        if border_color:
+            border_rgb = (
+                border_color.red() / 255.0,
+                border_color.green() / 255.0,
+                border_color.blue() / 255.0
+            )
+        else:
+            border_rgb = (0, 0, 0)
+        
+        border_width = props.get('border_width', 2)
+        
+        # Get fill color if enabled
+        fill_rgba = None
+        if props.get('fill_enabled') and props.get('fill_color'):
+            fill_color = props.get('fill_color')
+            fill_rgba = (
+                fill_color.red() / 255.0,
+                fill_color.green() / 255.0,
+                fill_color.blue() / 255.0,
+                fill_color.alpha() / 255.0
+            )
+        
+        # Draw shape based on type
+        if shape_type == 'rectangle':
+            return backend.add_rectangle_shape(
+                page_num,
+                self._shape_data['x0'],
+                self._shape_data['y0'],
+                self._shape_data['x1'],
+                self._shape_data['y1'],
+                border_rgb,
+                border_width,
+                fill_rgba
+            )
+        elif shape_type == 'circle':
+            return backend.add_circle_shape(
+                page_num,
+                self._shape_data['center_x'],
+                self._shape_data['center_y'],
+                self._shape_data['radius'],
+                border_rgb,
+                border_width,
+                fill_rgba
+            )
+        elif shape_type == 'line':
+            return backend.add_line_shape(
+                page_num,
+                self._shape_data['x0'],
+                self._shape_data['y0'],
+                self._shape_data['x1'],
+                self._shape_data['y1'],
+                border_rgb,
+                border_width
+            )
+        
+        return False
+    
+    def get_description(self) -> str:
+        """Get action description."""
+        shape_type = self._shape_data.get('type', 'shape')
+        return f"Add {shape_type}"
+    
+    def get_page_number(self) -> int:
+        """Get the page number this action affects."""
+        return self._page_number
+
+
 class UndoManager(QObject):
     """
     Manages undo and redo stacks for edit operations.

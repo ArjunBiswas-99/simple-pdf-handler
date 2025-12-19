@@ -13,9 +13,10 @@ the Free Software Foundation, either version 3 of the License, or
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from ui.widgets import ShapeDrawingToolbar
 
 
 class EditToolsPanel(QWidget):
@@ -50,35 +51,58 @@ class EditToolsPanel(QWidget):
         self._redo_button = None
         self._edit_pages_button = None
         self._pages_edit_mode_active = False
+        self._shape_toolbar = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
-        """Set up the panel layout and widgets."""
-        # Main layout with spacing
-        layout = QVBoxLayout()
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(20)
+        """Set up the panel layout and widgets with scroll area."""
+        # Create scroll area for the panel
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        
+        # Create container widget for all content
+        container = QWidget()
+        content_layout = QVBoxLayout(container)
+        content_layout.setContentsMargins(16, 16, 16, 16)
+        content_layout.setSpacing(20)
         
         # Undo/Redo Section (Always at top)
-        layout.addWidget(self._create_undo_redo_section())
+        content_layout.addWidget(self._create_undo_redo_section())
         
         # Add separator
-        layout.addWidget(self._create_separator())
+        content_layout.addWidget(self._create_separator())
         
         # Content Tools Section
-        layout.addWidget(self._create_section_label("📝 CONTENT TOOLS"))
-        layout.addWidget(self._create_content_tools_section())
+        content_layout.addWidget(self._create_section_label("📝 CONTENT TOOLS"))
+        content_layout.addWidget(self._create_content_tools_section())
         
         # Add separator
-        layout.addWidget(self._create_separator())
+        content_layout.addWidget(self._create_separator())
+        
+        # Shape Drawing Section
+        self._shape_toolbar = ShapeDrawingToolbar()
+        content_layout.addWidget(self._shape_toolbar)
+        
+        # Add separator
+        content_layout.addWidget(self._create_separator())
         
         # Edit Pages Toggle Button
-        layout.addWidget(self._create_edit_pages_section())
+        content_layout.addWidget(self._create_edit_pages_section())
         
         # Add stretch to push everything to the top
-        layout.addStretch()
+        content_layout.addStretch()
         
-        self.setLayout(layout)
+        # Set container as scroll area's widget
+        scroll_area.setWidget(container)
+        
+        # Set scroll area as the main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll_area)
+        self.setLayout(main_layout)
     
     def _create_separator(self) -> QWidget:
         """
@@ -373,3 +397,12 @@ class EditToolsPanel(QWidget):
             self._pages_edit_mode_active = False
             self._edit_pages_button.setText("✂️  Edit Pages")
             self._edit_pages_button.setStyleSheet(self._get_default_button_style())
+    
+    def get_shape_toolbar(self) -> ShapeDrawingToolbar:
+        """
+        Get the shape drawing toolbar instance.
+        
+        Returns:
+            ShapeDrawingToolbar instance
+        """
+        return self._shape_toolbar

@@ -170,6 +170,7 @@ class MainWindow(QMainWindow):
         self._canvas.text_selected.connect(self._on_text_selected)
         self._canvas.zoom_requested.connect(self._on_zoom_requested)
         self._canvas.image_selected.connect(self._on_image_selected)
+        self._canvas.shape_drawn.connect(self._on_shape_drawn)
         self._main_splitter.addWidget(self._canvas)
         
         # Create Right Sidebar (mirrors left sidebar)
@@ -361,6 +362,13 @@ class MainWindow(QMainWindow):
         edit_tools_panel.undo_clicked.connect(self._on_undo)
         edit_tools_panel.redo_clicked.connect(self._on_redo)
         edit_tools_panel.edit_pages_toggled.connect(self._on_edit_pages_toggled)
+        
+        # Connect shape drawing toolbar
+        shape_toolbar = edit_tools_panel.get_shape_toolbar()
+        shape_toolbar.drawing_started.connect(self._on_shape_drawing_started)
+        
+        # Connect canvas shape_drawn signal (note: canvas is created later in _setup_ui)
+        # This connection will be made after canvas is created
         
         # Connect undo manager signals - CRITICAL: This enables/disables buttons
         self._undo_manager.can_undo_changed.connect(edit_tools_panel.set_undo_enabled)
@@ -2783,6 +2791,124 @@ class MainWindow(QMainWindow):
     def _on_edit_text(self) -> None:
         """Handle Edit Text button click from Edit Tools panel."""
         self._status_bar.showMessage("Edit Text - Coming soon", 2000)
+    
+    def _on_shape_drawing_started(self, shape_type: str, properties: dict) -> None:
+        """
+        Handle shape drawing mode activation from toolbar.
+        
+        Args:
+            shape_type: Type of shape to draw ('rectangle', 'circle', 'line')
+            properties: Shape properties (colors, widths, fill)
+        """
+        if not self._document.is_open():
+            self._status_bar.showMessage("Please open a PDF first", 2000)
+            return
+        
+        # Enter shape drawing mode on canvas
+        self._canvas.enter_shape_drawing_mode(shape_type, properties)
+        self._status_bar.showMessage(
+            f"Click and drag to draw {shape_type}. Right-click to cancel.", 
+            0
+        )
+    
+    def _on_shape_drawn(self, shape_data: dict) -> None:
+        """
+        Handle shape completion - add to PDF and record for undo.
+        
+        Args:
+            shape_data: Dictionary containing shape type, coordinates, and properties
+        """
+        if not self._document.is_open():
+            return
+        
+        # Extract shape info
+        shape_type = shape_data.get('type')
+        page_num = shape_data.get('page_number')
+        props = shape_data.get('properties', {})
+        
+        # CRITICAL: Capture page snapshot BEFORE drawing for undo support
+        backend = self._document._backend
+        page_snapshot = backend.capture_page_snapshot(page_num)
+        
+        # Convert QColor to RGB tuples (0-1 range)
+        border_color = props.get('border_color')
+        if border_color:
+            border_rgb = (
+                border_color.red() / 255.0,
+                border_color.green() / 255.0,
+                border_color.blue() / 255.0
+            )
+        else:
+            border_rgb = (0, 0, 0)
+        
+        border_width = props.get('border_width', 2)
+        
+        # Get fill color if enabled
+        fill_rgba = None
+        if props.get('fill_enabled') and props.get('fill_color'):
+            fill_color = props.get('fill_color')
+            fill_rgba = (
+                fill_color.red() / 255.0,
+                fill_color.green() / 255.0,
+                fill_color.blue() / 255.0,
+                fill_color.alpha() / 255.0
+            )
+        
+        # Call appropriate backend method
+        backend = self._document._backend
+        success = False
+        
+        if shape_type == 'rectangle':
+            success = backend.add_rectangle_shape(
+                page_num,
+                shape_data['x0'],
+                shape_data['y0'],
+                shape_data['x1'],
+                shape_data['y1'],
+                border_rgb,
+                border_width,
+                fill_rgba
+            )
+        elif shape_type == 'circle':
+            success = backend.add_circle_shape(
+                page_num,
+                shape_data['center_x'],
+                shape_data['center_y'],
+                shape_data['radius'],
+                border_rgb,
+                border_width,
+                fill_rgba
+            )
+        elif shape_type == 'line':
+            success = backend.add_line_shape(
+                page_num,
+                shape_data['x0'],
+                shape_data['y0'],
+                shape_data['x1'],
+                shape_data['y1'],
+                border_rgb,
+                border_width
+            )
+        
+        if success:
+            # Mark document as modified
+            self._document.get_state_manager().mark_dirty()
+            
+            # Create undo action with page snapshot
+            from core.undo_manager import AddShapeAction
+            action = AddShapeAction(shape_data, page_snapshot)
+            self._undo_manager.record_action(action)
+            
+            # Re-render the page to show new shape
+            self._render_current_view()
+            
+            # Refresh thumbnail for this page
+            self._refresh_page_thumbnail(page_num)
+            
+            # Show success message
+            self._status_bar.showMessage(f"{shape_type.capitalize()} added to page {page_num + 1}", 2000)
+        else:
+            self._status_bar.showMessage(f"Failed to add {shape_type}", 2000)
     
     def _on_edit_pages_toggled(self, enabled: bool) -> None:
         """

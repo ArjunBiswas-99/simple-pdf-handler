@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRectF, QPointF
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QCursor
 from typing import List, Dict, Optional, Tuple
 from ui.pdf_canvas_text_handler import handle_text_placement_click
+from ui.pdf_canvas_shape_handler import ShapeDrawingHandler
 
 
 class PDFCanvas(QScrollArea):
@@ -27,6 +28,9 @@ class PDFCanvas(QScrollArea):
     
     # Signal emitted when an image is selected
     image_selected = pyqtSignal(int, dict)  # page_number, image_info
+    
+    # Signal emitted when a shape is drawn
+    shape_drawn = pyqtSignal(dict)  # shape_data
     
     def __init__(self, parent=None):
         """
@@ -71,6 +75,9 @@ class PDFCanvas(QScrollArea):
         self._text_placement_mode = False
         self._inline_editor = None
         self._format_toolbar = None
+        
+        # Shape drawing support
+        self._shape_handler = ShapeDrawingHandler(self)
         
         self._setup_ui()
     
@@ -415,14 +422,66 @@ class PDFCanvas(QScrollArea):
             self._format_toolbar.deleteLater()
             self._format_toolbar = None
     
+    def enter_shape_drawing_mode(self, shape_type: str, properties: dict) -> None:
+        """
+        Enter shape drawing mode.
+        
+        Args:
+            shape_type: Type of shape to draw ('rectangle', 'circle', 'line')
+            properties: Shape properties (colors, widths, fill)
+        """
+        self._shape_handler.enter_drawing_mode(shape_type, properties)
+    
+    def exit_shape_drawing_mode(self) -> None:
+        """Exit shape drawing mode."""
+        self._shape_handler.exit_drawing_mode()
+    
+    def is_shape_drawing_active(self) -> bool:
+        """
+        Check if shape drawing mode is active.
+        
+        Returns:
+            True if active, False otherwise
+        """
+        return self._shape_handler.is_active()
+    
+    def _viewport_to_pdf_coords(self, viewport_point: QPointF, page_label) -> Optional[QPointF]:
+        """
+        Convert viewport coordinates to PDF coordinates.
+        
+        Args:
+            viewport_point: Point in viewport coordinates
+            page_label: Page label widget
+            
+        Returns:
+            Point in PDF coordinates, or None if conversion fails
+        """
+        if not page_label or not page_label.pixmap():
+            return None
+        
+        # Convert viewport point to page label coordinates
+        label_point = page_label.mapFromGlobal(self.viewport().mapToGlobal(viewport_point.toPoint()))
+        
+        # Scale to PDF coordinates (undo zoom)
+        pdf_x = label_point.x() / self._zoom_level
+        pdf_y = label_point.y() / self._zoom_level
+        
+        return QPointF(pdf_x, pdf_y)
+    
     def mousePressEvent(self, event) -> None:
         """
-        Handle mouse press event for text placement, image or text selection.
+        Handle mouse press event for shape drawing, text placement, image or text selection.
         
         Args:
             event: Mouse event
         """
-        # Handle text placement mode FIRST
+        # Handle shape drawing mode FIRST
+        if self._shape_handler.is_active():
+            if self._shape_handler.handle_mouse_press(event):
+                event.accept()
+                return
+        
+        # Handle text placement mode SECOND
         if self._text_placement_mode and event.button() == Qt.MouseButton.LeftButton:
             # If editor is already open, ignore new clicks (modal behavior)
             if self._inline_editor is not None:
@@ -532,11 +591,17 @@ class PDFCanvas(QScrollArea):
     
     def mouseMoveEvent(self, event) -> None:
         """
-        Handle mouse move event to update selection or change cursor.
+        Handle mouse move event for shape drawing or selection.
         
         Args:
             event: Mouse event
         """
+        # Handle shape drawing move FIRST
+        if self._shape_handler.is_active():
+            if self._shape_handler.handle_mouse_move(event):
+                event.accept()
+                return
+        
         # Change cursor when over text
         page_info = self._get_page_at_position(event.pos())
         if page_info is not None and self._selection_enabled:
@@ -571,11 +636,21 @@ class PDFCanvas(QScrollArea):
     
     def mouseReleaseEvent(self, event) -> None:
         """
-        Handle mouse release event to finalize text selection.
+        Handle mouse release event for shape drawing or text selection.
         
         Args:
             event: Mouse event
         """
+        # Handle shape drawing release FIRST
+        if self._shape_handler.is_active():
+            handled, shape_data = self._shape_handler.handle_mouse_release(event)
+            if handled:
+                # If shape was finalized, emit signal for MainWindow to handle
+                if shape_data:
+                    self.shape_drawn.emit(shape_data)
+                event.accept()
+                return
+        
         if event.button() != Qt.MouseButton.LeftButton:
             super().mouseReleaseEvent(event)
             return
@@ -619,11 +694,15 @@ class PDFCanvas(QScrollArea):
         Get the page label and relative position for a viewport position.
         
         Args:
-            pos: Position in viewport coordinates
+            pos: Position in viewport coordinates (QPoint or QPointF)
             
         Returns:
             Tuple of (page_number, page_label, point_in_page) or None
         """
+        # Convert QPointF to QPoint if needed
+        if isinstance(pos, QPointF):
+            pos = pos.toPoint()
+        
         # Convert viewport position to container position
         container_pos = self.widget().mapFromParent(pos)
         
@@ -634,6 +713,7 @@ class PDFCanvas(QScrollArea):
             
             # Check if position is within this label
             label_rect = label.geometry()
+            # container_pos is already a QPoint from mapFromParent
             if label_rect.contains(container_pos):
                 # Get position relative to label
                 point_in_label = label.mapFrom(self.widget(), container_pos)
@@ -975,6 +1055,23 @@ class PDFCanvas(QScrollArea):
         
         # No modifier - normal scrolling
         super().wheelEvent(event)
+    
+    def paintEvent(self, event) -> None:
+        """
+        Override paint event to draw shape preview overlay.
+        
+        Args:
+            event: Paint event
+        """
+        # Call parent to paint normally
+        super().paintEvent(event)
+        
+        # Draw shape preview if active
+        if self._shape_handler.is_active():
+            painter = QPainter(self.viewport())
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            self._shape_handler.paint_preview(painter)
+            painter.end()
 
 
 class HighlightableLabel(QLabel):
