@@ -160,6 +160,7 @@ class MainWindow(QMainWindow):
         self._canvas.verticalScrollBar().valueChanged.connect(self._on_scroll)
         self._canvas.text_selected.connect(self._on_text_selected)
         self._canvas.zoom_requested.connect(self._on_zoom_requested)
+        self._canvas.image_selected.connect(self._on_image_selected)
         self._main_splitter.addWidget(self._canvas)
         
         # Create Right Sidebar (mirrors left sidebar)
@@ -687,11 +688,13 @@ class MainWindow(QMainWindow):
         
         self._status_bar.showMessage(f"Rendering {page_count} pages...")
         
-        # Render all pages
+        # Render all pages and load images for each page
         for page_num in range(page_count):
             pixmap = self._document.render_page(page_num)
             if pixmap:
                 pixmaps.append(pixmap)
+                # Load images for this page
+                self._load_page_images(page_num)
             else:
                 self._show_error(f"Failed to render page {page_num + 1}")
                 return
@@ -701,6 +704,19 @@ class MainWindow(QMainWindow):
         
         # Scroll to appropriate page
         self._canvas.scroll_to_page(current_page)
+    
+    def _load_page_images(self, page_num: int) -> None:
+        """
+        Load and cache images for a specific page.
+        
+        Args:
+            page_num: Page number (0-indexed)
+        """
+        # Get images from document
+        images = self._document.get_page_images(page_num)
+        
+        # Pass to canvas for caching
+        self._canvas.load_page_images(page_num, images)
     
     def _render_initial_pages_lazy(self, preserve_page: bool = False) -> None:
         """
@@ -713,6 +729,9 @@ class MainWindow(QMainWindow):
         page_count = self._document.get_page_count()
         zoom = self._document.get_zoom_level()
         current_page = self._document.get_current_page() if preserve_page else 0
+        
+        # Clear image cache for fresh render
+        self._canvas.clear_page_images()
         
         # Render pages around current page (current ± 10 pages)
         window_size = 10
@@ -732,6 +751,8 @@ class MainWindow(QMainWindow):
                 # Render pages in window
                 pixmap = self._document.render_page(page_num)
                 pixmaps.append(pixmap if pixmap else QPixmap())
+                # Load images for this page
+                self._load_page_images(page_num)
             else:
                 # Create placeholder for other pages
                 page_size = self._document.get_page_size(page_num)
@@ -782,7 +803,7 @@ class MainWindow(QMainWindow):
         if not pages_to_render:
             return  # All visible pages already rendered
         
-        # Render these pages
+        # Render these pages and load their images
         for page_num in pages_to_render:
             pixmap = self._document.render_page(page_num)
             if pixmap:
@@ -790,6 +811,8 @@ class MainWindow(QMainWindow):
                 page_label = self._canvas._page_labels[page_num]
                 page_label.setPixmap(pixmap)
                 self._rendered_pages.add(page_num)
+                # Load images for this page
+                self._load_page_images(page_num)
         
         # Update status
         rendered_count = len(self._rendered_pages)
@@ -1120,6 +1143,9 @@ class MainWindow(QMainWindow):
         page_count = self._document.get_page_count()
         
         self._status_bar.showMessage(f"Rendering pages at {int(zoom * 100)}%...")
+        
+        # Clear image cache for fresh render
+        self._canvas.clear_page_images()
         
         # Update canvas zoom level
         self._canvas.set_zoom_level(zoom)
@@ -1637,12 +1663,34 @@ class MainWindow(QMainWindow):
         else:
             self._zoom_out()
     
+    def _on_image_selected(self, page_num: int, image_info: dict) -> None:
+        """
+        Handle image selection signal from canvas.
+        
+        Args:
+            page_num: Page number containing the selected image (0-indexed)
+            image_info: Dictionary with image information (rect, xref, width, height, colorspace)
+        """
+        # Show image dimensions in status bar
+        width = image_info.get('width', 'unknown')
+        height = image_info.get('height', 'unknown')
+        self._status_bar.showMessage(
+            f"Image selected: {width}×{height}px (Press Ctrl+C to copy)", 
+            3000
+        )
+    
     def _copy_selected_text(self) -> None:
-        """Copy currently selected text to clipboard."""
+        """Copy currently selected text or image to clipboard."""
         if not self._document.is_open():
             return
         
-        # Get selection info from canvas
+        # Check if an image is selected first
+        selected_image = self._canvas.get_selected_image()
+        if selected_image:
+            self._copy_selected_image()
+            return
+        
+        # Get text selection info from canvas
         selection_info = self._canvas.get_selection_info()
         if not selection_info:
             return
@@ -2165,15 +2213,60 @@ class MainWindow(QMainWindow):
         current_page = self._document.get_current_page()
         self._pages_panel.set_current_page(current_page)
     
+    def _copy_selected_image(self) -> None:
+        """Copy currently selected image to clipboard."""
+        if not self._document.is_open():
+            return
+        
+        # Get selected image info from canvas
+        selected_image = self._canvas.get_selected_image()
+        if not selected_image:
+            return
+        
+        page_num, image_info = selected_image
+        xref = image_info['xref']
+        
+        # Show extracting status
+        self._status_bar.showMessage("Extracting image...")
+        QApplication.processEvents()
+        
+        # Extract image at original resolution
+        pixmap = self._document.extract_image(page_num, xref)
+        
+        if pixmap and not pixmap.isNull():
+            # Copy to clipboard
+            clipboard = QApplication.clipboard()
+            clipboard.setPixmap(pixmap)
+            
+            # Show success feedback
+            width = pixmap.width()
+            height = pixmap.height()
+            self._status_bar.showMessage(
+                f"Copied image ({width}×{height}px) to clipboard", 
+                3000
+            )
+        else:
+            # Failed to extract image
+            self._show_error("Failed to extract image from PDF")
+            self._status_bar.showMessage("Image extraction failed")
+    
     def _clear_selection(self) -> None:
-        """Clear the current text selection."""
+        """Clear the current text or image selection."""
+        # Clear text selection
         self._canvas.clear_selection()
+        
+        # Clear image selection
+        self._canvas.clear_image_selection()
+        
         self._status_bar.showMessage("Selection cleared", 1000)
     
     def _set_single_page_mode(self) -> None:
         """Switch to single page view mode."""
         if not self._document.is_open():
             return
+        
+        # Clear image cache for fresh render
+        self._canvas.clear_page_images()
         
         # Update document view mode
         self._document.set_view_mode(ViewMode.SINGLE_PAGE)
@@ -2187,6 +2280,8 @@ class MainWindow(QMainWindow):
         current_page = self._document.get_current_page()
         pixmap = self._document.render_page(current_page)
         if pixmap:
+            # Load images for this page
+            self._load_page_images(current_page)
             self._canvas.display_single_page(pixmap, current_page)
             self._status_bar.showMessage("Single page mode activated", 2000)
         
@@ -2247,6 +2342,9 @@ class MainWindow(QMainWindow):
         if not self._document.is_open():
             return
         
+        # Clear image cache for fresh render
+        self._canvas.clear_page_images()
+        
         # Store current page BEFORE mode switch
         current_page = self._document.get_current_page()
         
@@ -2267,6 +2365,8 @@ class MainWindow(QMainWindow):
             # Show only first page (cover)
             pixmap = self._document.render_page(0)
             if pixmap:
+                # Load images for cover page
+                self._load_page_images(0)
                 self._canvas.display_facing_pages(pixmap, None, 0, None)
         else:
             # Determine which pair to show
@@ -2286,6 +2386,10 @@ class MainWindow(QMainWindow):
             right_pixmap = self._document.render_page(right_page) if right_page is not None else None
             
             if left_pixmap:
+                # Load images for both pages
+                self._load_page_images(left_page)
+                if right_page is not None:
+                    self._load_page_images(right_page)
                 self._canvas.display_facing_pages(left_pixmap, right_pixmap, left_page, right_page)
         
         # Ensure current page is preserved in document

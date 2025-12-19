@@ -179,3 +179,28 @@ class PDFDocument:
             mode: ViewMode enum value (CONTINUOUS, SINGLE_PAGE, or FACING)
         """
         self._view_mode = mode
+    
+    def get_page_images(self, page_number: int) -> list:
+        """
+        Get all images on a specific page with their bounding rectangles.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            List of dicts with image information (rect, xref, width, height, colorspace)
+        """
+        return self._backend.get_page_images(page_number)
+    
+    def extract_image(self, page_number: int, xref: int) -> Optional[QPixmap]:
+        """
+        Extract a specific image from a page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            xref: Image reference number from get_page_images()
+            
+        Returns:
+            QPixmap of the extracted image, or None if extraction fails
+        """
+        return self._backend.extract_image(page_number, xref)

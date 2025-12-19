@@ -24,6 +24,9 @@ class PDFCanvas(QScrollArea):
     # Signal emitted when zoom is requested via Ctrl/Cmd + Wheel
     zoom_requested = pyqtSignal(bool)  # True for zoom in, False for zoom out
     
+    # Signal emitted when an image is selected
+    image_selected = pyqtSignal(int, dict)  # page_number, image_info
+    
     def __init__(self, parent=None):
         """
         Initialize the PDF canvas.
@@ -57,6 +60,11 @@ class PDFCanvas(QScrollArea):
         self._last_double_click_time = 0
         self._triple_click_threshold = 500  # milliseconds
         self._ignore_next_mouse_press = False  # Flag to skip mousePress after double-click
+        
+        # Image selection support
+        self._page_images: Dict[int, List[dict]] = {}  # Cache of images per page
+        self._selected_image: Optional[Tuple[int, dict]] = None  # (page_num, image_info)
+        self._hovered_image: Optional[Tuple[int, dict]] = None  # (page_num, image_info)
         
         self._setup_ui()
     
@@ -384,7 +392,7 @@ class PDFCanvas(QScrollArea):
     
     def mousePressEvent(self, event) -> None:
         """
-        Handle mouse press event to start or extend text selection.
+        Handle mouse press event for image or text selection.
         
         Args:
             event: Mouse event
@@ -392,7 +400,6 @@ class PDFCanvas(QScrollArea):
         # Skip this event if it's right after a double-click
         if self._ignore_next_mouse_press:
             self._ignore_next_mouse_press = False
-            print("[DEBUG] Skipping mousePressEvent after double-click")
             event.accept()
             return
         
@@ -414,27 +421,34 @@ class PDFCanvas(QScrollArea):
             point_in_page.y() / self._zoom_level
         )
         
+        # Check if click is on an image
+        image_info = self.get_image_at_point(page_num, pdf_point)
+        if image_info:
+            # Clicked on an image - select it
+            self.select_image(page_num, image_info)
+            event.accept()
+            return
+        
+        # Not on image - proceed with text selection
         # Check if we have a word selection that can be extended
         if self._has_word_selection and self._selection_rect and page_num == self._selection_page:
-            print(f"[DEBUG] Has word selection, checking for extension...")
-            
             # Any click or drag from word selection extends it
             # Keep the original selection start point
             self._selection_current = pdf_point
             self._is_selecting = True
             self._has_word_selection = False  # Convert to regular selection for dragging
             self._update_selection_rect()
-            
-            print(f"[DEBUG] Extending selection from {self._selection_start} to {pdf_point}")
         else:
             # No existing word selection - start new drag selection
-            print(f"[DEBUG] Starting new selection at {pdf_point}")
             self._has_word_selection = False
             self._is_selecting = True
             self._selection_start = pdf_point
             self._selection_current = pdf_point
             self._selection_page = page_num
             self._update_selection_rect()
+        
+        # Clear any image selection when starting text selection
+        self.clear_image_selection()
         
         # Update display
         if isinstance(page_label, HighlightableLabel):
@@ -450,8 +464,6 @@ class PDFCanvas(QScrollArea):
         Args:
             event: Mouse event
         """
-        print(f"[DEBUG] Double-click detected! Button: {event.button()}, Selection enabled: {self._selection_enabled}")
-        
         if not self._selection_enabled or event.button() != Qt.MouseButton.LeftButton:
             super().mouseDoubleClickEvent(event)
             return
@@ -467,12 +479,10 @@ class PDFCanvas(QScrollArea):
         # Get which page was clicked
         page_info = self._get_page_at_position(event.pos())
         if page_info is None:
-            print("[DEBUG] No page found at position")
             super().mouseDoubleClickEvent(event)
             return
         
         page_num, page_label, point_in_page = page_info
-        print(f"[DEBUG] Double-click on page {page_num} at {point_in_page}")
         
         # Convert to PDF coordinates
         pdf_point = QPointF(
@@ -482,7 +492,6 @@ class PDFCanvas(QScrollArea):
         
         # Select word at this point
         self._select_word_at_point(page_num, pdf_point, page_label)
-        print(f"[DEBUG] Word selection attempted at PDF point {pdf_point}")
         
         event.accept()
     
@@ -659,6 +668,88 @@ class PDFCanvas(QScrollArea):
         """
         self._zoom_level = zoom_level
     
+    def load_page_images(self, page_number: int, images: List[dict]) -> None:
+        """
+        Load and cache images for a specific page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            images: List of image info dicts from get_page_images()
+        """
+        self._page_images[page_number] = images
+    
+    def clear_page_images(self) -> None:
+        """Clear all cached page images."""
+        self._page_images.clear()
+    
+    def get_image_at_point(self, page_num: int, pdf_point: QPointF) -> Optional[dict]:
+        """
+        Check if a point intersects with any image on the page.
+        
+        Args:
+            page_num: Page number (0-indexed)
+            pdf_point: Point in PDF coordinates
+            
+        Returns:
+            Image info dict if point intersects an image, None otherwise
+        """
+        if page_num not in self._page_images:
+            return None
+        
+        # Check each image on the page (in reverse order to get topmost)
+        for image_info in reversed(self._page_images[page_num]):
+            rect = image_info['rect']
+            if rect.contains(pdf_point):
+                return image_info
+        
+        return None
+    
+    def select_image(self, page_num: int, image_info: dict) -> None:
+        """
+        Select an image on a page.
+        
+        Args:
+            page_num: Page number (0-indexed)
+            image_info: Image information dict
+        """
+        # Clear any text selection
+        self.clear_selection()
+        
+        # Store selected image
+        self._selected_image = (page_num, image_info)
+        
+        # Update display to show image selection
+        if 0 <= page_num < len(self._page_labels):
+            label = self._page_labels[page_num]
+            if isinstance(label, HighlightableLabel):
+                label.set_selected_image(image_info['rect'], self._zoom_level)
+                label.update()
+        
+        # Emit signal
+        self.image_selected.emit(page_num, image_info)
+    
+    def clear_image_selection(self) -> None:
+        """Clear the current image selection."""
+        if self._selected_image:
+            page_num, _ = self._selected_image
+            self._selected_image = None
+            
+            # Update display
+            if 0 <= page_num < len(self._page_labels):
+                label = self._page_labels[page_num]
+                if isinstance(label, HighlightableLabel):
+                    label.clear_selected_image()
+                    label.update()
+    
+    def get_selected_image(self) -> Optional[Tuple[int, dict]]:
+        """
+        Get the currently selected image.
+        
+        Returns:
+            Tuple of (page_number, image_info) or None if no image selected
+        """
+        return self._selected_image
+    
     def _select_word_at_point(self, page_num: int, pdf_point: QPointF, page_label) -> None:
         """
         Select the word at the given point (double-click behavior).
@@ -668,8 +759,6 @@ class PDFCanvas(QScrollArea):
             pdf_point: Point in PDF coordinates
             page_label: Page label widget
         """
-        print(f"[DEBUG] _select_word_at_point called for page {page_num}")
-        
         # Store page and point for word selection
         self._selection_page = page_num
         self._selection_start = pdf_point  # Store for potential extension
@@ -683,8 +772,6 @@ class PDFCanvas(QScrollArea):
             click_tolerance * 2
         )
         
-        print(f"[DEBUG] Created selection rect: {self._selection_rect}")
-        
         # Mark that we have a word selection (enables extension on drag)
         self._has_word_selection = True
         
@@ -695,7 +782,6 @@ class PDFCanvas(QScrollArea):
         if isinstance(page_label, HighlightableLabel):
             page_label.set_selection(self._selection_rect, self._zoom_level)
             page_label.update()
-            print("[DEBUG] Updated page label with selection")
     
     def _select_line_at_point(self, page_num: int, pdf_point: QPointF, page_label) -> None:
         """
@@ -745,8 +831,6 @@ class PDFCanvas(QScrollArea):
             self._selection_start = QPointF(selection_rect.left(), selection_rect.top())
             self._selection_current = QPointF(selection_rect.right(), selection_rect.bottom())
         
-        print(f"[DEBUG] set_selection_rect called with rect: {selection_rect}, _has_word_selection=True")
-        
         # Update the display on the appropriate page
         if self._selection_page is not None and 0 <= self._selection_page < len(self._page_labels):
             label = self._page_labels[self._selection_page]
@@ -780,7 +864,6 @@ class PDFCanvas(QScrollArea):
                 self._update_selection_rect()
                 self._update_selection_display()
                 event.accept()
-                print(f"[DEBUG] Shift+Right: Extended selection to {self._selection_current}")
                 return
         
         elif event.key() == Qt.Key.Key_Left:
@@ -794,7 +877,6 @@ class PDFCanvas(QScrollArea):
                 self._update_selection_rect()
                 self._update_selection_display()
                 event.accept()
-                print(f"[DEBUG] Shift+Left: Extended selection to {self._selection_current}")
                 return
         
         elif event.key() == Qt.Key.Key_Down:
@@ -808,7 +890,6 @@ class PDFCanvas(QScrollArea):
                 self._update_selection_rect()
                 self._update_selection_display()
                 event.accept()
-                print(f"[DEBUG] Shift+Down: Extended selection to {self._selection_current}")
                 return
         
         elif event.key() == Qt.Key.Key_Up:
@@ -822,7 +903,6 @@ class PDFCanvas(QScrollArea):
                 self._update_selection_rect()
                 self._update_selection_display()
                 event.accept()
-                print(f"[DEBUG] Shift+Up: Extended selection to {self._selection_current}")
                 return
         
         super().keyPressEvent(event)
@@ -882,6 +962,8 @@ class HighlightableLabel(QLabel):
         self._current_match: Optional[tuple] = None
         self._zoom_level: float = 1.0
         self._selection_rect: Optional[QRectF] = None
+        self._selected_image_rect: Optional[QRectF] = None
+        self._hovered_image_rects: List[QRectF] = []
     
     def set_highlights(
         self,
@@ -921,9 +1003,39 @@ class HighlightableLabel(QLabel):
         """Clear the text selection from this label."""
         self._selection_rect = None
     
+    def set_selected_image(self, image_rect: QRectF, zoom_level: float) -> None:
+        """
+        Set selected image rectangle to display on this page.
+        
+        Args:
+            image_rect: Rectangle of selected image (in PDF coordinates)
+            zoom_level: Zoom level for coordinate scaling
+        """
+        self._selected_image_rect = image_rect
+        self._zoom_level = zoom_level
+    
+    def clear_selected_image(self) -> None:
+        """Clear the selected image from this label."""
+        self._selected_image_rect = None
+    
+    def set_hovered_images(self, image_rects: List[QRectF], zoom_level: float) -> None:
+        """
+        Set hovered image rectangles to display on this page.
+        
+        Args:
+            image_rects: List of image rectangles being hovered (in PDF coordinates)
+            zoom_level: Zoom level for coordinate scaling
+        """
+        self._hovered_image_rects = image_rects
+        self._zoom_level = zoom_level
+    
+    def clear_hovered_images(self) -> None:
+        """Clear hovered image highlights from this label."""
+        self._hovered_image_rects.clear()
+    
     def paintEvent(self, event) -> None:
         """
-        Custom paint event to draw highlights and selection over the PDF page.
+        Custom paint event to draw highlights, selection, and image borders over the PDF page.
         
         Args:
             event: Paint event
@@ -931,15 +1043,33 @@ class HighlightableLabel(QLabel):
         # First, let the parent class paint the pixmap
         super().paintEvent(event)
         
-        # If no highlights or selection, nothing more to do
-        if (not self._highlights and not self._selection_rect) or not self.pixmap():
+        # Check if we have anything to paint
+        has_content = (self._highlights or self._selection_rect or 
+                      self._selected_image_rect or self._hovered_image_rects)
+        
+        if not has_content or not self.pixmap():
             return
         
         # Create painter for drawing
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Draw search highlights first (so selection appears on top)
+        # Draw hovered images first (dashed border)
+        for rect in self._hovered_image_rects:
+            scaled_rect = QRectF(
+                rect.x() * self._zoom_level,
+                rect.y() * self._zoom_level,
+                rect.width() * self._zoom_level,
+                rect.height() * self._zoom_level
+            )
+            
+            # Dashed blue border for hover
+            pen = QPen(QColor(38, 128, 235, 200), 2, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(scaled_rect)
+        
+        # Draw search highlights
         for rect in self._highlights:
             # Scale rectangle to current zoom level
             scaled_rect = QRectF(
@@ -969,7 +1099,7 @@ class HighlightableLabel(QLabel):
             # Draw the highlight rectangle
             painter.drawRect(scaled_rect)
         
-        # Draw text selection on top
+        # Draw text selection
         if self._selection_rect:
             scaled_selection = QRectF(
                 self._selection_rect.x() * self._zoom_level,
@@ -982,5 +1112,20 @@ class HighlightableLabel(QLabel):
             painter.setBrush(QColor(38, 128, 235, 60))  # Professional blue
             painter.setPen(QPen(QColor(38, 128, 235, 180), 1))
             painter.drawRect(scaled_selection)
+        
+        # Draw selected image (solid border + overlay on top of everything)
+        if self._selected_image_rect:
+            scaled_image = QRectF(
+                self._selected_image_rect.x() * self._zoom_level,
+                self._selected_image_rect.y() * self._zoom_level,
+                self._selected_image_rect.width() * self._zoom_level,
+                self._selected_image_rect.height() * self._zoom_level
+            )
+            
+            # Semi-transparent blue overlay
+            painter.setBrush(QColor(38, 128, 235, 25))  # Light blue overlay
+            # Solid blue border
+            painter.setPen(QPen(QColor(38, 128, 235, 255), 3))  # Solid, thicker border
+            painter.drawRect(scaled_image)
         
         painter.end()

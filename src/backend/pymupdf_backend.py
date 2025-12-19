@@ -405,3 +405,136 @@ class PyMuPDFBackend:
         # Stub for future implementation
         # Will return list of dicts with keys: name, size, type, data
         return []
+    
+    def get_page_images(self, page_number: int) -> List[dict]:
+        """
+        Extract all images from a page with their bounding rectangles.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            List of dicts with keys:
+            - 'rect': QRectF - image bounding box in PDF coordinates
+            - 'xref': int - image reference number in PDF
+            - 'width': int - image width in pixels
+            - 'height': int - image height in pixels
+            - 'colorspace': str - color space (e.g., 'DeviceRGB')
+            Empty list if no images found or page doesn't exist
+        """
+        if not self._document:
+            return []
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return []
+        
+        try:
+            page = self._document[page_number]
+            
+            # Get list of images on the page
+            # Returns list of tuples: (xref, smask, width, height, bpp, colorspace, alt. colorspace, name, filter, referencer)
+            image_list = page.get_images(full=True)
+            
+            if not image_list:
+                return []
+            
+            # Extract image info with bounding rectangles
+            images = []
+            for img_info in image_list:
+                xref = img_info[0]  # Image reference number
+                
+                # Get image bounding rectangles on the page (can have multiple occurrences)
+                # get_image_rects returns list of fitz.Rect objects
+                rects = page.get_image_rects(xref)
+                
+                if rects:
+                    # Get image properties
+                    width = img_info[2]
+                    height = img_info[3]
+                    colorspace = img_info[5] if len(img_info) > 5 else "Unknown"
+                    
+                    # Add an entry for each occurrence of the image on the page
+                    for bbox in rects:
+                        # Convert fitz.Rect to QRectF
+                        rect = QRectF(bbox.x0, bbox.y0, bbox.width, bbox.height)
+                        
+                        images.append({
+                            'rect': rect,
+                            'xref': xref,
+                            'width': width,
+                            'height': height,
+                            'colorspace': colorspace
+                        })
+            
+            return images
+            
+        except Exception as e:
+            print(f"Error extracting images from page {page_number}: {e}")
+            return []
+    
+    def extract_image(self, page_number: int, xref: int) -> Optional[QPixmap]:
+        """
+        Extract a specific image from a page by its xref reference number.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            xref: Image reference number from get_page_images()
+            
+        Returns:
+            QPixmap of the extracted image at original resolution,
+            or None if extraction fails
+        """
+        if not self._document:
+            return None
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return None
+        
+        try:
+            # Extract the image pixmap using xref
+            # This gets the raw image data at original resolution
+            pix = fitz.Pixmap(self._document, xref)
+            
+            # Convert CMYK or other color spaces to RGB
+            if pix.colorspace and pix.colorspace.name not in ("DeviceRGB", "DeviceGray"):
+                pix = fitz.Pixmap(fitz.csRGB, pix)
+            
+            # Convert to RGB if grayscale (for consistent clipboard format)
+            if pix.n < 4:  # Grayscale or RGB without alpha
+                # Already in correct format
+                pass
+            elif pix.n == 4 and pix.alpha:
+                # RGBA - convert to RGB by removing alpha
+                pix = fitz.Pixmap(fitz.csRGB, pix)
+            
+            # Determine Qt image format based on components
+            if pix.n == 1:
+                # Grayscale
+                img_format = QImage.Format.Format_Grayscale8
+            elif pix.n == 3:
+                # RGB
+                img_format = QImage.Format.Format_RGB888
+            elif pix.n == 4:
+                # RGBA
+                img_format = QImage.Format.Format_RGBA8888
+            else:
+                print(f"Unsupported image format: {pix.n} components")
+                return None
+            
+            # Convert to QImage
+            qimage = QImage(
+                pix.samples,
+                pix.width,
+                pix.height,
+                pix.stride,
+                img_format
+            )
+            
+            # Convert to QPixmap
+            pixmap = QPixmap.fromImage(qimage.copy())
+            
+            return pixmap
+            
+        except Exception as e:
+            print(f"Error extracting image (xref={xref}) from page {page_number}: {e}")
+            return None
