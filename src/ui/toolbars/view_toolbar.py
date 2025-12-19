@@ -257,17 +257,17 @@ class ViewToolbar(QWidget):
         self._open_btn.clicked.connect(self.open_file.emit)
         layout.addWidget(self._open_btn)
         
-        # Save button (grayed out)
+        # Save button
         self._save_btn = QPushButton("💾 Save")
-        self._save_btn.setToolTip("Save document (Coming soon)")
-        self._save_btn.setEnabled(False)
+        self._save_btn.setToolTip("Save document (Ctrl+S)")
+        self._save_btn.setEnabled(False)  # Enabled when document is dirty
         self._save_btn.clicked.connect(self.save_file.emit)
         layout.addWidget(self._save_btn)
         
-        # Save As button (grayed out)
+        # Save As button
         self._save_as_btn = QPushButton("💾 Save As▼")
-        self._save_as_btn.setToolTip("Save document as (Coming soon)")
-        self._save_as_btn.setEnabled(False)
+        self._save_as_btn.setToolTip("Save document as...")
+        self._save_as_btn.setEnabled(False)  # Enabled when document is open
         self._save_as_btn.clicked.connect(self.save_file_as.emit)
         layout.addWidget(self._save_as_btn)
         
@@ -506,3 +506,23 @@ class ViewToolbar(QWidget):
         self._single_page_btn.setEnabled(enabled)
         self._continuous_page_btn.setEnabled(enabled)
         self._facing_page_btn.setEnabled(enabled)
+    
+    def set_save_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable the Save button.
+        Typically enabled when document has unsaved changes.
+        
+        Args:
+            enabled: True to enable Save button, False to disable
+        """
+        self._save_btn.setEnabled(enabled)
+    
+    def set_save_as_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable the Save As button.
+        Typically enabled when a document is open.
+        
+        Args:
+            enabled: True to enable Save As button, False to disable
+        """
+        self._save_as_btn.setEnabled(enabled)

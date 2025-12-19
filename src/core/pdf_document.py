@@ -16,22 +16,39 @@ GNU General Public License for more details.
 
 from typing import Optional, Tuple
 from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import pyqtSignal, QObject
 from backend.pymupdf_backend import PyMuPDFBackend
 from utils.constants import ViewMode
+from core.document_state_manager import DocumentStateManager
+from core.pdf_object import ObjectCollection
 
 
-class PDFDocument:
+class PDFDocument(QObject):
     """
     High-level abstraction for PDF document operations.
     Decouples UI from backend implementation details.
+    
+    This class now includes state management for tracking document modifications
+    and manages a collection of editable objects added during edit mode.
     """
     
+    # Signal emitted when document dirty state changes
+    document_state_changed = pyqtSignal(bool)  # True = dirty, False = clean
+    
     def __init__(self):
-        """Initialize PDF document with backend."""
+        """Initialize PDF document with backend and state management."""
+        super().__init__()
         self._backend = PyMuPDFBackend()
         self._current_page: int = 0
         self._zoom_level: float = 1.0
         self._view_mode: ViewMode = ViewMode.CONTINUOUS
+        
+        # State management for edit mode
+        self._state_manager = DocumentStateManager()
+        self._state_manager.state_changed.connect(self._on_state_changed)
+        
+        # Collection of editable objects (text, images, etc.)
+        self._objects = ObjectCollection()
     
     def open(self, file_path: str) -> bool:
         """
@@ -48,6 +65,12 @@ class PDFDocument:
             self._current_page = 0
             self._zoom_level = 1.0
             self._view_mode = ViewMode.CONTINUOUS
+            
+            # Update state manager with new file
+            self._state_manager.set_file_path(file_path)
+            
+            # Clear any objects from previous document
+            self._objects.clear()
         return success
     
     def close(self) -> None:
@@ -56,6 +79,12 @@ class PDFDocument:
         self._current_page = 0
         self._zoom_level = 1.0
         self._view_mode = ViewMode.CONTINUOUS
+        
+        # Reset state manager
+        self._state_manager.reset()
+        
+        # Clear objects
+        self._objects.clear()
     
     def is_open(self) -> bool:
         """
@@ -204,3 +233,97 @@ class PDFDocument:
             QPixmap of the extracted image, or None if extraction fails
         """
         return self._backend.extract_image(page_number, xref)
+    
+    def add_text_annotation(
+        self,
+        page_number: int,
+        x: float,
+        y: float,
+        text: str,
+        font_name: str = "helv",
+        font_size: int = 12,
+        color: tuple = (0, 0, 0)
+    ) -> Optional[int]:
+        """
+        Add text annotation to a page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            x, y: Position in PDF coordinates
+            text: Text content
+            font_name: Font name
+            font_size: Font size in points
+            color: RGB color tuple (0.0-1.0 range)
+            
+        Returns:
+            Annotation xref if successful, None otherwise
+        """
+        xref = self._backend.add_text_annotation(
+            page_number, x, y, text, font_name, font_size, color
+        )
+        
+        if xref is not None:
+            # Mark document as dirty when text is added
+            self._state_manager.mark_dirty()
+        
+        return xref
+    
+    def save(self, file_path: Optional[str] = None) -> bool:
+        """
+        Save the PDF document.
+        
+        Args:
+            file_path: Path to save to, or None to save to current file
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._backend.is_loaded():
+            return False
+        
+        # Use current file path if none provided
+        save_path = file_path or self._backend.get_file_path()
+        
+        if not save_path:
+            return False
+        
+        # Save PDF
+        success = self._backend.save_pdf(save_path)
+        
+        if success:
+            # Mark as clean after successful save
+            self._state_manager.mark_clean()
+            
+            # Update file path if saved to new location
+            if file_path:
+                self._state_manager.set_file_path(file_path)
+        
+        return success
+    
+    def get_state_manager(self) -> DocumentStateManager:
+        """
+        Get the document state manager.
+        
+        Returns:
+            DocumentStateManager instance for this document
+        """
+        return self._state_manager
+    
+    def get_objects(self) -> ObjectCollection:
+        """
+        Get the collection of editable objects.
+        
+        Returns:
+            ObjectCollection containing all editable objects
+        """
+        return self._objects
+    
+    def _on_state_changed(self, is_dirty: bool) -> None:
+        """
+        Handle state change from state manager.
+        
+        Args:
+            is_dirty: True if document is dirty, False if clean
+        """
+        # Forward signal to document observers
+        self.document_state_changed.emit(is_dirty)

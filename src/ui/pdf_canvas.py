@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRectF, QPointF
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QCursor
 from typing import List, Dict, Optional, Tuple
+from ui.pdf_canvas_text_handler import handle_text_placement_click
 
 
 class PDFCanvas(QScrollArea):
@@ -65,6 +66,11 @@ class PDFCanvas(QScrollArea):
         self._page_images: Dict[int, List[dict]] = {}  # Cache of images per page
         self._selected_image: Optional[Tuple[int, dict]] = None  # (page_num, image_info)
         self._hovered_image: Optional[Tuple[int, dict]] = None  # (page_num, image_info)
+        
+        # Text placement mode support
+        self._text_placement_mode = False
+        self._inline_editor = None
+        self._format_toolbar = None
         
         self._setup_ui()
     
@@ -390,13 +396,42 @@ class PDFCanvas(QScrollArea):
                 label.clear_highlights()
                 label.update()
     
+    def enter_text_placement_mode(self) -> None:
+        """Enter text placement mode."""
+        self._text_placement_mode = True
+        self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+    
+    def exit_text_placement_mode(self) -> None:
+        """Exit text placement mode."""
+        self._text_placement_mode = False
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+        
+        # Clean up editor and toolbar if they exist
+        if self._inline_editor:
+            self._inline_editor.deleteLater()
+            self._inline_editor = None
+        
+        if self._format_toolbar:
+            self._format_toolbar.deleteLater()
+            self._format_toolbar = None
+    
     def mousePressEvent(self, event) -> None:
         """
-        Handle mouse press event for image or text selection.
+        Handle mouse press event for text placement, image or text selection.
         
         Args:
             event: Mouse event
         """
+        # Handle text placement mode FIRST
+        if self._text_placement_mode and event.button() == Qt.MouseButton.LeftButton:
+            # If editor is already open, ignore new clicks (modal behavior)
+            if self._inline_editor is not None:
+                event.accept()
+                return
+            
+            handle_text_placement_click(self, event)
+            return
+        
         # Skip this event if it's right after a double-click
         if self._ignore_next_mouse_press:
             self._ignore_next_mouse_press = False

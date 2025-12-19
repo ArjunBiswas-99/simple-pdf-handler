@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QApplication, QVBoxLayout, QScrollArea
 )
 from PyQt6.QtCore import Qt, QTimer, QRectF
-from PyQt6.QtGui import QAction, QKeySequence, QPixmap
+from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QCloseEvent
 from ui.pdf_canvas import PDFCanvas
 from ui.progress_dialog import ProgressDialog
 from ui.app_bar import AppBar
@@ -34,8 +34,10 @@ from ui.sidebar.panels.pages_panel import PagesPanel
 from ui.sidebar.panels.bookmarks_panel import BookmarksPanel
 from ui.sidebar.panels.search_panel import SearchPanel as SidebarSearchPanel
 from ui.sidebar.panels.attachments_panel import AttachmentsPanel
+from ui.sidebar.panels.edit_tools_panel import EditToolsPanel
 from ui.sidebar.right_sidebar import RightSidebar
 from ui.right_panel import DocumentPropertiesPanel
+from ui.widgets import InlineTextEditor, TextFormatToolbar
 from ui.styles.design_tokens import AppMode, SidebarMode, SIZING
 from core.pdf_document import PDFDocument
 from core.pdf_loader_worker import PDFLoaderWorker
@@ -73,6 +75,10 @@ class MainWindow(QMainWindow):
         self._zoom_worker = None
         self._thumbnail_worker = None
         
+        # Undo/Redo manager
+        from core.undo_manager import UndoManager
+        self._undo_manager = UndoManager()
+        
         # Search functionality
         self._search_worker = None
         self._search_results = SearchResultsManager()
@@ -96,6 +102,9 @@ class MainWindow(QMainWindow):
         
         self._setup_ui()
         self._update_window_title()
+        
+        # Connect document state changes to window title updates
+        self._document.document_state_changed.connect(self._on_document_state_changed)
     
     def _setup_ui(self) -> None:
         """Configure the main window layout and components."""
@@ -204,6 +213,7 @@ class MainWindow(QMainWindow):
         """Connect View Toolbar signals to MainWindow handlers."""
         # File operations
         self._view_toolbar.open_file.connect(self._on_open_file)
+        self._view_toolbar.save_file.connect(self._on_save)
         
         # Navigation
         self._view_toolbar.first_page.connect(self._go_to_first_page)
@@ -333,11 +343,46 @@ class MainWindow(QMainWindow):
         # Create document properties panel
         doc_props_panel = DocumentPropertiesPanel()
         
-        # Store reference for updates
+        # Create edit tools panel
+        edit_tools_panel = EditToolsPanel()
+        
+        # Store reference FIRST before connecting signals
+        self._edit_tools_panel = edit_tools_panel
+        
+        # Connect edit tools signals
+        edit_tools_panel.add_text_clicked.connect(self._on_add_text)
+        edit_tools_panel.add_image_clicked.connect(self._on_add_image)
+        edit_tools_panel.add_page_clicked.connect(self._on_add_page)
+        edit_tools_panel.attach_file_clicked.connect(self._on_attach_file)
+        edit_tools_panel.undo_clicked.connect(self._on_undo)
+        edit_tools_panel.redo_clicked.connect(self._on_redo)
+        edit_tools_panel.select_object_clicked.connect(self._on_select_object)
+        edit_tools_panel.edit_text_clicked.connect(self._on_edit_text)
+        edit_tools_panel.edit_image_clicked.connect(self._on_edit_image)
+        edit_tools_panel.delete_object_clicked.connect(self._on_delete_object)
+        edit_tools_panel.bring_forward_clicked.connect(self._on_bring_forward)
+        edit_tools_panel.send_backward_clicked.connect(self._on_send_backward)
+        edit_tools_panel.bring_to_front_clicked.connect(self._on_bring_to_front)
+        edit_tools_panel.send_to_back_clicked.connect(self._on_send_to_back)
+        
+        # Connect undo manager signals - CRITICAL: This enables/disables buttons
+        self._undo_manager.can_undo_changed.connect(edit_tools_panel.set_undo_enabled)
+        self._undo_manager.can_redo_changed.connect(edit_tools_panel.set_redo_enabled)
+        
+        # Also manually check initial state and enable if needed
+        if self._undo_manager.can_undo():
+            edit_tools_panel.set_undo_enabled(True)
+        if self._undo_manager.can_redo():
+            edit_tools_panel.set_redo_enabled(True)
+        
+        # Store references for updates
         self._doc_props_panel = doc_props_panel
         
-        # Add to right sidebar (panel index 0 = Properties)
+        # Add to right sidebar
+        # Panel index 0 = Properties
+        # Panel index 1 = Edit Tools
         self._right_sidebar.add_panel(0, doc_props_panel)
+        self._right_sidebar.add_panel(1, edit_tools_panel)
     
     def _on_mode_changed(self, mode: AppMode) -> None:
         """
@@ -346,9 +391,45 @@ class MainWindow(QMainWindow):
         Args:
             mode: The new active mode
         """
-        # For now, just log the mode change
-        # In future phases, this will switch context toolbars
         self._status_bar.showMessage(f"Switched to {mode.value} mode", 2000)
+        
+        # Switch behavior based on mode
+        if mode == AppMode.EDIT:
+            # Switch to Edit mode
+            self._enter_edit_mode()
+        else:
+            # Switch back to View mode (or other modes)
+            self._exit_edit_mode()
+    
+    def _enter_edit_mode(self) -> None:
+        """
+        Enter Edit mode.
+        Shows Edit Tools panel and prepares canvas for editing.
+        """
+        if not self._document.is_open():
+            self._status_bar.showMessage("Please open a PDF file first", 3000)
+            # Switch back to View mode
+            self._mode_tabs.set_mode(AppMode.VIEW)
+            return
+        
+        # Switch right sidebar to Edit Tools panel (index 1)
+        self._right_sidebar.set_active_panel(1)
+        
+        # Enable edit tools
+        if hasattr(self, '_edit_tools_panel'):
+            self._edit_tools_panel.set_tools_enabled(True)
+        
+        self._status_bar.showMessage("Edit mode active - Use right panel tools to edit PDF", 3000)
+    
+    def _exit_edit_mode(self) -> None:
+        """
+        Exit Edit mode.
+        Returns to Properties panel.
+        """
+        # Switch right sidebar back to Properties panel (index 0)
+        self._right_sidebar.set_active_panel(0)
+        
+        self._status_bar.showMessage("Edit mode exited", 2000)
     
     def _setup_keyboard_shortcuts(self) -> None:
         """Set up keyboard shortcuts for navigation and search."""
@@ -423,6 +504,24 @@ class MainWindow(QMainWindow):
         escape_shortcut.setShortcut(QKeySequence(Qt.Key.Key_Escape))
         escape_shortcut.triggered.connect(self._clear_selection)
         self.addAction(escape_shortcut)
+        
+        # Save shortcut
+        save_shortcut = QAction(self)
+        save_shortcut.setShortcut(QKeySequence("Ctrl+S"))
+        save_shortcut.triggered.connect(self._on_save)
+        self.addAction(save_shortcut)
+        
+        # Undo shortcut (Ctrl+Z / Cmd+Z)
+        undo_shortcut = QAction(self)
+        undo_shortcut.setShortcut(QKeySequence("Ctrl+Z"))
+        undo_shortcut.triggered.connect(self._on_undo)
+        self.addAction(undo_shortcut)
+        
+        # Redo shortcut (Ctrl+Shift+Z / Cmd+Shift+Z)
+        redo_shortcut = QAction(self)
+        redo_shortcut.setShortcut(QKeySequence("Ctrl+Shift+Z"))
+        redo_shortcut.triggered.connect(self._on_redo)
+        self.addAction(redo_shortcut)
     
     def _on_open_file(self) -> None:
         """Handle file open action."""
@@ -552,6 +651,9 @@ class MainWindow(QMainWindow):
         # Update window title
         self._update_window_title(file_name)
         
+        # Enable Save As button (document is now open)
+        self._view_toolbar.set_save_as_enabled(True)
+        
         # Update View Toolbar state
         self._update_view_toolbar_state()
         
@@ -594,6 +696,10 @@ class MainWindow(QMainWindow):
             self._update_view_toolbar_state()
             self._disable_navigation_controls()
             self._disable_zoom_controls()
+            
+            # Disable Save/Save As buttons
+            self._view_toolbar.set_save_enabled(False)
+            self._view_toolbar.set_save_as_enabled(False)
             
             # Clear bookmarks
             if hasattr(self, '_bookmarks_panel'):
@@ -978,14 +1084,35 @@ class MainWindow(QMainWindow):
     def _update_window_title(self, file_name: str = None) -> None:
         """
         Update the window title with current document name.
+        Adds asterisk (*) suffix if document has unsaved changes.
         
         Args:
             file_name: Name of the currently open file, or None if no file is open
         """
         if file_name:
-            self.setWindowTitle(f"{file_name} - Simple PDF Handler")
+            # Check if document is dirty (has unsaved changes)
+            state_manager = self._document.get_state_manager()
+            dirty_marker = "*" if state_manager.is_dirty() else ""
+            self.setWindowTitle(f"{file_name}{dirty_marker} - Simple PDF Handler")
         else:
             self.setWindowTitle("Simple PDF Handler")
+    
+    def _on_document_state_changed(self, is_dirty: bool) -> None:
+        """
+        Handle document dirty state change.
+        Updates window title and Save button state.
+        
+        Args:
+            is_dirty: True if document has unsaved changes, False otherwise
+        """
+        # Get current file name and update title
+        file_path = self._document.get_file_path()
+        if file_path:
+            file_name = os.path.basename(file_path)
+            self._update_window_title(file_name)
+        
+        # Enable/disable Save button based on dirty state
+        self._view_toolbar.set_save_enabled(is_dirty)
     
     def _enable_zoom_controls(self) -> None:
         """Enable zoom controls when a document is loaded."""
@@ -2260,6 +2387,38 @@ class MainWindow(QMainWindow):
         
         self._status_bar.showMessage("Selection cleared", 1000)
     
+    def _on_save(self) -> None:
+        """Handle Ctrl+S save shortcut."""
+        if not self._document.is_open():
+            return
+        
+        if not self._document.get_state_manager().is_dirty():
+            self._status_bar.showMessage("No changes to save", 2000)
+            return
+        
+        # Get file path before saving
+        file_path = self._document.get_file_path()
+        current_page = self._document.get_current_page()
+        
+        # Save the document
+        success = self._document.save()
+        
+        if success:
+            self._status_bar.showMessage("Document saved successfully", 2000)
+            
+            # Re-open the document to continue working
+            # (PyMuPDF closes the document after save)
+            if self._document.open(file_path):
+                # Restore the current page
+                self._document.set_current_page(current_page)
+                
+                # Re-render current view to show the saved state
+                self._render_current_view()
+            else:
+                self._show_error("Document saved but failed to re-open")
+        else:
+            self._show_error("Failed to save document")
+    
     def _set_single_page_mode(self) -> None:
         """Switch to single page view mode."""
         if not self._document.is_open():
@@ -2404,15 +2563,252 @@ class MainWindow(QMainWindow):
         # Delay thumbnail selection update to ensure canvas has updated
         QTimer.singleShot(50, self._update_pages_panel_selection)
     
-    def closeEvent(self, event) -> None:
+    def _on_add_text(self) -> None:
+        """Handle Add Text button click from Edit Tools panel."""
+        if not self._document.is_open():
+            self._status_bar.showMessage("Please open a PDF first", 2000)
+            return
+        
+        # Enter text placement mode
+        self._canvas.enter_text_placement_mode()
+        self._status_bar.showMessage("Click on the page where you want to add text", 0)
+    
+    def _on_text_committed(self, text: str, format_props: dict, page_num: int, pdf_x: float, pdf_y: float) -> None:
+        """
+        Handle text committed from inline editor.
+        
+        Args:
+            text: Text content
+            format_props: Format properties (font, size, color, etc.)
+            page_num: Page number where text was added
+            pdf_x, pdf_y: PDF coordinates
+        """
+        # Convert Qt color to PDF color (0-1 range)
+        qt_color = format_props['color']
+        pdf_color = (qt_color.red() / 255.0, qt_color.green() / 255.0, qt_color.blue() / 255.0)
+        
+        # Map font name to PDF font
+        font_map = {
+            'Helvetica': 'helv',
+            'Times-Roman': 'times',
+            'Courier': 'cour'
+        }
+        pdf_font = font_map.get(format_props['font'], 'helv')
+        
+        # Add text annotation to PDF
+        annot_xref = self._document.add_text_annotation(
+            page_num,
+            pdf_x,
+            pdf_y,
+            text,
+            font_name=pdf_font,
+            font_size=format_props['size'],
+            color=pdf_color
+        )
+        
+        if annot_xref:
+            # Mark document as modified (enables save)
+            self._document.get_state_manager().mark_dirty()
+            
+            # Create and record undo action
+            from core.undo_manager import AddTextAction
+            action = AddTextAction(
+                page_num,
+                pdf_x,
+                pdf_y,
+                text,
+                pdf_font,
+                format_props['size'],
+                pdf_color,
+                annot_xref
+            )
+            self._undo_manager.record_action(action)
+            
+            # Create TextObject for tracking
+            from core.pdf_object import TextObject
+            from PyQt6.QtCore import QPointF
+            
+            # Create position point
+            position = QPointF(pdf_x, pdf_y)
+            
+            # Create TextObject with correct signature
+            text_obj = TextObject(
+                page_number=page_num,
+                position=position,
+                content=text
+            )
+            
+            # Set font properties
+            text_obj.set_font_name(format_props['font'])
+            text_obj.set_font_size(format_props['size'])
+            text_obj.set_color(format_props['color'])
+            text_obj.set_bold(format_props.get('bold', False))
+            text_obj.set_italic(format_props.get('italic', False))
+            text_obj.set_underline(format_props.get('underline', False))
+            
+            # Store the annotation reference
+            text_obj.set_annotation_id(annot_xref)
+            
+            # Add to document's object collection
+            self._document.get_objects().add(text_obj)
+            
+            # Re-render the page to show new text
+            self._render_current_view()
+            
+            self._status_bar.showMessage(f"Text added to page {page_num + 1}", 2000)
+        else:
+            self._status_bar.showMessage("Failed to add text", 2000)
+    
+    def _render_current_view(self) -> None:
+        """Re-render current view mode to show changes."""
+        view_mode = self._document.get_view_mode()
+        current_page = self._document.get_current_page()
+        
+        if view_mode == ViewMode.CONTINUOUS:
+            # Re-render all pages
+            page_count = self._document.get_page_count()
+            if page_count > 50:
+                self._render_initial_pages_lazy(preserve_page=True)
+            else:
+                self._render_all_pages(preserve_page=True)
+        elif view_mode == ViewMode.SINGLE_PAGE:
+            # Re-render current page
+            pixmap = self._document.render_page(current_page)
+            if pixmap:
+                self._canvas.display_single_page(pixmap, current_page)
+        elif view_mode == ViewMode.FACING:
+            # Re-render facing pages
+            self._set_facing_pages_mode()
+    
+    def _on_add_image(self) -> None:
+        """Handle Add Image button click from Edit Tools panel."""
+        self._status_bar.showMessage("Add Image - Coming in Phase 3", 2000)
+    
+    def _on_add_page(self) -> None:
+        """Handle Add Page button click from Edit Tools panel."""
+        self._status_bar.showMessage("Add Page - Coming in Phase 3", 2000)
+    
+    def _on_attach_file(self) -> None:
+        """Handle Attach File button click from Edit Tools panel."""
+        self._status_bar.showMessage("Attach File - Coming in Phase 3", 2000)
+    
+    def _on_select_object(self) -> None:
+        """Handle Select Object button click from Edit Tools panel."""
+        self._status_bar.showMessage("Select Object - Coming soon", 2000)
+    
+    def _on_edit_text(self) -> None:
+        """Handle Edit Text button click from Edit Tools panel."""
+        self._status_bar.showMessage("Edit Text - Coming soon", 2000)
+    
+    def _on_edit_image(self) -> None:
+        """Handle Edit Image button click from Edit Tools panel."""
+        self._status_bar.showMessage("Edit Image - Coming in Phase 3", 2000)
+    
+    def _on_delete_object(self) -> None:
+        """Handle Delete button click from Edit Tools panel."""
+        self._status_bar.showMessage("Delete Object - Coming soon", 2000)
+    
+    def _on_bring_forward(self) -> None:
+        """Handle Bring Forward button click from Edit Tools panel."""
+        self._status_bar.showMessage("Bring Forward - Coming soon", 2000)
+    
+    def _on_send_backward(self) -> None:
+        """Handle Send Backward button click from Edit Tools panel."""
+        self._status_bar.showMessage("Send Backward - Coming soon", 2000)
+    
+    def _on_bring_to_front(self) -> None:
+        """Handle Bring to Front button click from Edit Tools panel."""
+        self._status_bar.showMessage("Bring to Front - Coming soon", 2000)
+    
+    def _on_send_to_back(self) -> None:
+        """Handle Send to Back button click from Edit Tools panel."""
+        self._status_bar.showMessage("Send to Back - Coming soon", 2000)
+    
+    def _on_undo(self) -> None:
+        """Handle undo request (Ctrl+Z or button click)."""
+        if not self._document.is_open():
+            return
+        
+        if not self._undo_manager.can_undo():
+            self._status_bar.showMessage("Nothing to undo", 1000)
+            return
+        
+        # Perform undo
+        page_num = self._undo_manager.undo(self._document._backend)
+        
+        if page_num is not None:
+            # Re-render the affected page
+            self._render_current_view()
+            self._status_bar.showMessage("Undo successful", 2000)
+        else:
+            self._status_bar.showMessage("Undo failed", 2000)
+    
+    def _on_redo(self) -> None:
+        """Handle redo request (Ctrl+Shift+Z or button click)."""
+        if not self._document.is_open():
+            return
+        
+        if not self._undo_manager.can_redo():
+            self._status_bar.showMessage("Nothing to redo", 1000)
+            return
+        
+        # Perform redo
+        page_num = self._undo_manager.redo(self._document._backend)
+        
+        if page_num is not None:
+            # Re-render the affected page
+            self._render_current_view()
+            self._status_bar.showMessage("Redo successful", 2000)
+        else:
+            self._status_bar.showMessage("Redo failed", 2000)
+    
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle window close event.
+        Shows save dialog if document has unsaved changes.
         
         Args:
             event: Close event
         """
-        # Clean up document resources
+        # Check if document has unsaved changes
         if self._document.is_open():
+            state_manager = self._document.get_state_manager()
+            
+            if state_manager.is_dirty():
+                # Document has unsaved changes - show save dialog
+                file_path = self._document.get_file_path()
+                file_name = os.path.basename(file_path) if file_path else "Untitled"
+                
+                # Create message box with save/don't save/cancel options
+                reply = QMessageBox.question(
+                    self,
+                    "Unsaved Changes",
+                    f"Do you want to save changes to \"{file_name}\"?",
+                    QMessageBox.StandardButton.Save | 
+                    QMessageBox.StandardButton.Discard | 
+                    QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Save  # Default button
+                )
+                
+                if reply == QMessageBox.StandardButton.Save:
+                    # User wants to save - trigger save operation
+                    # TODO: Implement save functionality in Phase 2
+                    # For now, just accept the close
+                    self._status_bar.showMessage("Save not yet implemented")
+                    # Uncomment this when save is implemented:
+                    # if not self._save_document():
+                    #     event.ignore()  # Save failed, don't close
+                    #     return
+                    pass
+                    
+                elif reply == QMessageBox.StandardButton.Cancel:
+                    # User cancelled - don't close
+                    event.ignore()
+                    return
+                
+                # If Discard, continue with close
+            
+            # Close the document
             self._document.close()
         
         # Stop any running worker threads

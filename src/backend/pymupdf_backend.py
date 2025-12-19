@@ -538,3 +538,201 @@ class PyMuPDFBackend:
         except Exception as e:
             print(f"Error extracting image (xref={xref}) from page {page_number}: {e}")
             return None
+    
+    def add_text_annotation(
+        self,
+        page_number: int,
+        x: float,
+        y: float,
+        text: str,
+        font_name: str = "helv",
+        font_size: int = 12,
+        color: Tuple[float, float, float] = (0, 0, 0)
+    ) -> Optional[int]:
+        """
+        Add a text annotation (FreeText) to a PDF page.
+        Supports multi-line text with proper line breaks.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            x: X coordinate in PDF coordinates
+            y: Y coordinate in PDF coordinates  
+            text: Text content (can contain newlines)
+            font_name: Font name (helv, times, cour)
+            font_size: Font size in points
+            color: RGB color tuple (0.0-1.0 range)
+            
+        Returns:
+            Annotation xref number if successful, None otherwise
+        """
+        if not self._document:
+            return None
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return None
+        
+        try:
+            page = self._document[page_number]
+            
+            # Split text into lines to calculate proper bounding box
+            lines = text.split('\n')
+            num_lines = len(lines)
+            
+            # Calculate dimensions for multi-line text
+            char_width = font_size * 0.6  # Average character width
+            line_height = font_size * 1.4  # Line height with spacing
+            
+            # Find longest line to determine width
+            max_line_length = max(len(line) for line in lines) if lines else 0
+            text_width = max_line_length * char_width
+            text_height = num_lines * line_height
+            
+            # Add some padding for better appearance
+            padding = 5
+            text_width += padding * 2
+            text_height += padding * 2
+            
+            # Create bounding rectangle for the text
+            # FreeText annotations need a rectangle
+            rect = fitz.Rect(x, y, x + text_width, y + text_height)
+            
+            # Add FreeText annotation
+            annot = page.add_freetext_annot(
+                rect,
+                text,
+                fontsize=font_size,
+                fontname=font_name,
+                text_color=color,
+                fill_color=(1, 1, 1),  # White background
+                align=fitz.TEXT_ALIGN_LEFT
+            )
+            
+            # Update annotation appearance
+            annot.update()
+            
+            # Return annotation reference number
+            return annot.xref
+            
+        except Exception as e:
+            print(f"Error adding text annotation to page {page_number}: {e}")
+            return None
+    
+    def update_text_annotation(
+        self,
+        page_number: int,
+        annot_xref: int,
+        text: Optional[str] = None,
+        font_size: Optional[int] = None,
+        color: Optional[Tuple[float, float, float]] = None
+    ) -> bool:
+        """
+        Update an existing text annotation.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            annot_xref: Annotation xref number
+            text: New text content (None to keep unchanged)
+            font_size: New font size (None to keep unchanged)
+            color: New RGB color tuple (None to keep unchanged)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return False
+        
+        try:
+            page = self._document[page_number]
+            
+            # Find annotation by xref
+            annot = None
+            for a in page.annots():
+                if a.xref == annot_xref:
+                    annot = a
+                    break
+            
+            if not annot:
+                return False
+            
+            # Update properties
+            if text is not None:
+                annot.set_info(content=text)
+            
+            if font_size is not None:
+                # Get current properties
+                info = annot.info
+                # Update with new font size
+                annot.set_font_size(font_size)
+            
+            if color is not None:
+                annot.set_colors(stroke=color)
+            
+            # Update annotation appearance
+            annot.update()
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating annotation {annot_xref} on page {page_number}: {e}")
+            return False
+    
+    def delete_annotation(self, page_number: int, annot_xref: int) -> bool:
+        """
+        Delete an annotation from a page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            annot_xref: Annotation xref number
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        if page_number < 0 or page_number >= self._document.page_count:
+            return False
+        
+        try:
+            page = self._document[page_number]
+            
+            # Find and delete annotation by xref
+            for annot in page.annots():
+                if annot.xref == annot_xref:
+                    page.delete_annot(annot)
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Error deleting annotation {annot_xref} from page {page_number}: {e}")
+            return False
+    
+    def save_pdf(self, output_path: str) -> bool:
+        """
+        Save the PDF to a file.
+        
+        Args:
+            output_path: Path to save the PDF to
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._document:
+            return False
+        
+        try:
+            # Check if saving to original file
+            if output_path == self._file_path:
+                # Save incrementally to original file
+                self._document.saveIncr()
+            else:
+                # Save to new file (full save)
+                self._document.save(output_path)
+            return True
+        except Exception as e:
+            print(f"Error saving PDF to {output_path}: {e}")
+            return False

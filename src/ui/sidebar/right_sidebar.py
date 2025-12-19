@@ -45,13 +45,10 @@ class RightSidebarIconRail(QWidget):
         layout.setSpacing(0)
         self.setLayout(layout)
         
-        # Create icon buttons (start with 1, can add more later)
+        # Create icon buttons (Properties and Edit Tools)
         icons = [
             ("ⓘ", "Properties"),
-            # Future panels can be added here
-            # ("📝", "Notes"),
-            # ("🎨", "Appearance"),
-            # ("⚙️", "Settings"),
+            ("✏️", "Edit Tools"),
         ]
         
         for idx, (icon, tooltip) in enumerate(icons):
