@@ -3,13 +3,13 @@
 ## Functional Requirements
 
 ### F1: PDF Viewing and Navigation
-*   **F1.1:** ✅ The application shall allow users to open PDF files from local storage.
-*   **F1.2:** ✅ The application shall render PDF content accurately, including text, images, and basic vector graphics.
-*   **F1.3:** ✅ The application shall support navigation between pages (next, previous, first, last, go to specific page number).
-*   **F1.4:** ✅ The application shall support zooming in and out of the PDF view (e.g., 50%, 75%, 100%, 125%, 150%, 200%, fit width, fit page).
-*   **F1.5:** ✅ The application shall allow users to search for text within the current PDF document.
-*   **F1.6:** ✅ The application shall allow users to select and copy text from the PDF.
-*   **F1.7:** ✅ The application shall allow users to select and copy images from the PDF.
+*   **F1.1:** ⬜ The application shall allow users to open PDF files from local storage.
+*   **F1.2:** ⬜ The application shall render PDF content accurately, including text, images, and basic vector graphics.
+*   **F1.3:** ⬜ The application shall support navigation between pages (next, previous, first, last, go to specific page number).
+*   **F1.4:** ⬜ The application shall support zooming in and out of the PDF view (e.g., 50%, 75%, 100%, 125%, 150%, 200%, fit width, fit page).
+*   **F1.5:** ⬜ The application shall allow users to search for text within the current PDF document.
+*   **F1.6:** ⬜ The application shall allow users to select and copy text from the PDF.
+*   **F1.7:** ⬜ The application shall allow users to select and copy images from the PDF.
 *   **F1.8:** ⬜ The application shall display existing annotations and comments in the PDF.
 
 ### F2: PDF Editing
@@ -70,45 +70,45 @@
 ## Technical Requirements
 
 ### T1: Platform Compatibility
-*   **T1.1:** ✅ The application shall run on Windows, macOS, and Linux operating systems.
-*   **T1.2:** ✅ The application shall be implemented in Python 3.8 or higher.
+*   **T1.1:** ⬜ The application shall run on Windows, macOS, and Linux operating systems.
+*   **T1.2:** ⬜ The application shall be implemented in Python 3.8 or higher.
 
 ### T2: GUI Framework
-*   **T2.1:** ✅ The application shall use PyQt6 as the GUI framework.
-*   **T2.2:** ✅ The application shall provide a clean, professional, and intuitive user interface.
-*   **T2.3:** ✅ The application shall support standard UI elements like menu bars, toolbars, status bars, and dialogs.
+*   **T2.1:** ⬜ The application shall use PyQt6 as the GUI framework.
+*   **T2.2:** ⬜ The application shall provide a clean, professional, and intuitive user interface.
+*   **T2.3:** ⬜ The application shall support standard UI elements like menu bars, toolbars, status bars, and dialogs.
 
 ### T3: PDF Processing Libraries
-*   **T3.1:** ✅ The application shall use PyMuPDF (fitz) for PDF processing operations.
-*   **T3.2:** ✅ The application shall implement an abstraction layer to decouple UI from backend implementation.
+*   **T3.1:** ⬜ The application shall use PyMuPDF (fitz) for PDF processing operations.
+*   **T3.2:** ⬜ The application shall implement an abstraction layer to decouple UI from backend implementation.
 
 ### T4: Performance
-*   **T4.1:** ✅ The application shall render PDF pages efficiently, even for moderately large files (up to 50MB).
-*   **T4.2:** ✅ The application shall handle file operations (open, save, merge) without significant delays for files under 100MB.
-*   **T4.3:** ✅ The application shall use threading for large file operations to prevent UI freezing.
+*   **T4.1:** ⬜ The application shall render PDF pages efficiently, even for moderately large files (up to 50MB).
+*   **T4.2:** ⬜ The application shall handle file operations (open, save, merge) without significant delays for files under 100MB.
+*   **T4.3:** ⬜ The application shall use threading for large file operations to prevent UI freezing.
 
 ### T5: Error Handling
-*   **T5.1:** ✅ The application shall provide meaningful error messages to the user when file operations fail (e.g., file not found, permission denied).
-*   **T5.2:** ✅ The application shall handle invalid PDF files gracefully without crashing.
+*   **T5.1:** ⬜ The application shall provide meaningful error messages to the user when file operations fail (e.g., file not found, permission denied).
+*   **T5.2:** ⬜ The application shall handle invalid PDF files gracefully without crashing.
 
 ### T6: Security
-*   **T6.1:** ✅ The application shall not execute JavaScript embedded within PDFs for security reasons.
-*   **T6.2:** ✅ The application shall validate user inputs where applicable to prevent potential security vulnerabilities.
+*   **T6.1:** ⬜ The application shall not execute JavaScript embedded within PDFs for security reasons.
+*   **T6.2:** ⬜ The application shall validate user inputs where applicable to prevent potential security vulnerabilities.
 
 ### T7: Design Principles
-*   **T7.1:** ✅ The application shall follow SOLID principles for maintainable and scalable code structure.
-*   **T7.2:** ✅ The application shall implement a Model-View-Controller (MVC) pattern to separate UI logic from business logic.
-*   **T7.3:** ✅ The application shall apply Gestalt principles (proximity, similarity, continuity, closure) in the user interface design for intuitive user experience.
+*   **T7.1:** ⬜ The application shall follow SOLID principles for maintainable and scalable code structure.
+*   **T7.2:** ⬜ The application shall implement a Model-View-Controller (MVC) pattern to separate UI logic from business logic.
+*   **T7.3:** ⬜ The application shall apply Gestalt principles (proximity, similarity, continuity, closure) in the user interface design for intuitive user experience.
 
 ### T8: Code Quality
-*   **T8.1:** ✅ The application shall include professional docstrings for all classes and functions.
-*   **T8.2:** ✅ The application shall use type hints for function parameters and return values.
-*   **T8.3:** ✅ The application shall follow single responsibility principle for all components.
+*   **T8.1:** ⬜ The application shall include professional docstrings for all classes and functions.
+*   **T8.2:** ⬜ The application shall use type hints for function parameters and return values.
+*   **T8.3:** ⬜ The application shall follow single responsibility principle for all components.
 
 ### T9: Licensing
-*   **T9.1:** ✅ The application shall be licensed under GNU General Public License v3.0.
-*   **T9.2:** ✅ All source files shall include appropriate copyright and license headers.
-*   **T9.3:** ✅ The application shall properly attribute third-party dependencies and their licenses.
+*   **T9.1:** ⬜ The application shall be licensed under GNU General Public License v3.0.
+*   **T9.2:** ⬜ All source files shall include appropriate copyright and license headers.
+*   **T9.3:** ⬜ The application shall properly attribute third-party dependencies and their licenses.
 
 ---
 
