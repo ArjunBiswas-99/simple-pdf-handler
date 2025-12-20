@@ -21,6 +21,14 @@ ApplicationWindow {
     
     color: Colors.background
     
+    // Keyboard Shortcuts
+    Shortcut {
+        sequence: StandardKey.Find  // Ctrl+F on Windows/Linux, Cmd+F on Mac
+        onActivated: {
+            topBar.focusSearchField()
+        }
+    }
+    
     // File Dialog for opening PDFs
     FileDialog {
         id: openFileDialog
@@ -163,6 +171,43 @@ ApplicationWindow {
                                     text: "Rotate"
                                     iconSource: "↻"
                                     onClicked: viewingController.rotate()
+                                }
+                                
+                                // Divider
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.preferredHeight: 32
+                                    color: Colors.divider
+                                }
+                                
+                                // View Mode Toggle Buttons
+                                Text {
+                                    text: "View:"
+                                    font.pixelSize: Typography.bodySmallSize
+                                    color: Colors.textSecondary
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                SecondaryButton {
+                                    text: "Single"
+                                    iconSource: "📄"
+                                    onClicked: viewingController.set_view_mode("single")
+                                    // Highlight if active
+                                    opacity: viewingController.view_mode === "single" ? 1.0 : 0.6
+                                }
+                                
+                                SecondaryButton {
+                                    text: "Two Page"
+                                    iconSource: "📄📄"
+                                    onClicked: viewingController.set_view_mode("two_page")
+                                    opacity: viewingController.view_mode === "two_page" ? 1.0 : 0.6
+                                }
+                                
+                                SecondaryButton {
+                                    text: "Scroll"
+                                    iconSource: "📜"
+                                    onClicked: viewingController.set_view_mode("scroll")
+                                    opacity: viewingController.view_mode === "scroll" ? 1.0 : 0.6
                                 }
                             }
                             

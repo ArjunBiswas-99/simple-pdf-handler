@@ -10,6 +10,7 @@ Licensed under GNU General Public License v3.0
 from PySide6.QtCore import Signal, Slot, Property, QUrl
 from PySide6.QtGui import QImage
 from pathlib import Path
+import fitz  # PyMuPDF
 from src.core.base_controller import BaseController
 from src.core.settings_manager import SettingsManager
 from .model import ViewingModel
@@ -28,6 +29,7 @@ class ViewingController(BaseController):
     zoom_level_changed = Signal()
     document_loaded_changed = Signal()
     filename_changed = Signal()
+    view_mode_changed = Signal()
     
     # Signals for events
     page_changed = Signal(int, int)  # current, total
@@ -35,6 +37,12 @@ class ViewingController(BaseController):
     rotation_changed = Signal(int)
     document_opened = Signal(str)  # filename
     pdf_image_updated = Signal(QImage)  # emits rendered page image
+    page_rendered = Signal(int)  # emits when a specific page is rendered
+    
+    # Search signals (F1.5)
+    search_results_changed = Signal()  # Emitted when search results change
+    search_result = Signal(list)  # Emits list of (page_num, [(x0,y0,x1,y1),...])
+    current_match_changed = Signal()  # Emitted when current match changes
     
     def __init__(self, settings_manager: SettingsManager):
         """
@@ -49,6 +57,11 @@ class ViewingController(BaseController):
         self._settings = settings_manager
         self._current_filepath = ""
         self._image_provider = None  # Will be set by app
+        
+        # Search state (F1.5)
+        self._search_results = []  # List of (page_num, [(x0,y0,x1,y1),...])
+        self._current_match_index = 0
+        self._total_matches = 0
     
     # Properties exposed to QML
     @Property(int, notify=current_page_changed)
@@ -75,6 +88,22 @@ class ViewingController(BaseController):
     def filename(self) -> str:
         """Get current filename."""
         return self._model.filename
+    
+    @Property(str, notify=view_mode_changed)
+    def view_mode(self) -> str:
+        """Get current view mode."""
+        return self._model.view_mode
+    
+    # Search properties (F1.5)
+    @Property(int, notify=search_results_changed)
+    def search_match_count(self) -> int:
+        """Get total number of search matches."""
+        return self._total_matches
+    
+    @Property(int, notify=current_match_changed)
+    def current_match_index(self) -> int:
+        """Get current match index (1-indexed)."""
+        return self._current_match_index + 1 if self._total_matches > 0 else 0
     
     @Slot(result=str)
     def get_last_directory(self) -> str:
@@ -154,15 +183,72 @@ class ViewingController(BaseController):
     
     def _render_current_page(self) -> None:
         """Render the current page and emit the image."""
-        # Explicitly pass the current page to avoid any caching issues
-        image = self._renderer.render_page(self._renderer.current_page)
-        if image:
-            self._model.set_current_image(image)
-            # Update provider FIRST, BEFORE emitting signal
-            if self._image_provider:
-                self._image_provider.set_image(image)
-            # NOW emit signal to QML (provider already has the new image)
-            self.pdf_image_updated.emit(image)
+        current_page_num = self._model.current_page
+        self.render_specific_page(current_page_num)
+        
+        # Prefetch adjacent pages for smooth navigation
+        self._prefetch_adjacent_pages()
+    
+    @Slot(int)
+    def render_specific_page(self, page_num: int) -> None:
+        """
+        Render a specific page and cache it.
+        
+        Args:
+            page_num: Page number to render (1-indexed)
+        """
+        if page_num < 1 or page_num > self._model.page_count:
+            return
+        
+        # Convert to 0-indexed for renderer
+        page_index = page_num - 1
+        
+        # Render the page - EXPLICITLY pass the page index
+        image = self._renderer.render_page(page_num=page_index)
+        if image and self._image_provider:
+            # Cache in image provider
+            self._image_provider.set_page_image(page_num, image)
+            
+            # If this is the current page, also update model
+            if page_num == self._model.current_page:
+                self._model.set_current_image(image)
+                self.pdf_image_updated.emit(image)
+            
+            # Emit signal that page is ready
+            self.page_rendered.emit(page_num)
+    
+    def _prefetch_adjacent_pages(self) -> None:
+        """Prefetch pages around current page for smooth navigation."""
+        current = self._model.current_page
+        page_count = self._model.page_count
+        
+        # Determine pages to prefetch based on view mode
+        pages_to_prefetch = []
+        
+        if self._model.view_mode == "single":
+            # Prefetch next and previous pages
+            if current > 1:
+                pages_to_prefetch.append(current - 1)
+            if current < page_count:
+                pages_to_prefetch.append(current + 1)
+        
+        elif self._model.view_mode == "two_page":
+            # Prefetch next two pages
+            if current + 1 <= page_count:
+                pages_to_prefetch.append(current + 1)
+            if current + 2 <= page_count:
+                pages_to_prefetch.append(current + 2)
+        
+        elif self._model.view_mode == "scroll":
+            # Prefetch next 3 pages for scrolling
+            for i in range(1, 4):
+                if current + i <= page_count:
+                    pages_to_prefetch.append(current + i)
+        
+        # Render prefetch pages if not already cached
+        for page_num in pages_to_prefetch:
+            if self._image_provider and not self._image_provider.has_page(page_num):
+                self.render_specific_page(page_num)
     
     @Slot()
     def next_page(self) -> None:
@@ -271,6 +357,18 @@ class ViewingController(BaseController):
         """F1.5: Toggle fullscreen mode (mock for now)."""
         self.emit_complete_operation("Fullscreen toggled")
     
+    @Slot(str)
+    def set_view_mode(self, mode: str) -> None:
+        """
+        Set view mode (single, two_page, or scroll).
+        
+        Args:
+            mode: View mode string
+        """
+        self._model.set_view_mode(mode)
+        self.view_mode_changed.emit()
+        self.emit_complete_operation(f"View mode: {mode}")
+    
     def get_current_image(self) -> QImage:
         """
         Get current rendered page image.
@@ -280,6 +378,122 @@ class ViewingController(BaseController):
         """
         image = self._model.get_current_image()
         return image if image else QImage()
+    
+    @Slot(str, bool, bool)
+    def search_in_pdf(self, query: str, case_sensitive: bool = False, whole_word: bool = False) -> None:
+        """
+        F1.5: Search for text in the PDF document.
+        
+        Args:
+            query: Search query text
+            case_sensitive: Whether search should be case-sensitive
+            whole_word: Whether to match whole words only
+        """
+        print(f"[DEBUG] search_in_pdf called with query: '{query}'")
+        print(f"[DEBUG] Document loaded: {self._renderer.document is not None}")
+        
+        if not self._renderer.document or not query:
+            print("[DEBUG] Early return - no document or query")
+            self.emit_complete_operation("No search query")
+            return
+        
+        self.emit_start_operation(f"Searching for '{query}'...")
+        
+        try:
+            matches = []
+            page_count = self._renderer.get_page_count()
+            print(f"[DEBUG] Searching through {page_count} pages")
+            
+            # Search through all pages
+            for page_num in range(page_count):
+                page = self._renderer.document[page_num]
+                
+                # Perform search - use simple search without flags first
+                rects = page.search_for(query)
+                
+                if rects:
+                    print(f"[DEBUG] Found {len(rects)} matches on page {page_num + 1}")
+                    # Store matches: (1-indexed page, list of rect tuples)
+                    rect_data = [(r.x0, r.y0, r.x1, r.y1) for r in rects]
+                    matches.append((page_num + 1, rect_data))
+            
+            # Store and emit results
+            self._search_results = matches
+            self._total_matches = sum(len(rects) for _, rects in matches)
+            self._current_match_index = 0
+            
+            print(f"[DEBUG] Total matches found: {self._total_matches}")
+            print(f"[DEBUG] Emitting signals now...")
+            
+            if matches:
+                self.search_results_changed.emit()
+                self.search_result.emit(matches)
+                self.current_match_changed.emit()
+                
+                print(f"[DEBUG] search_match_count property: {self.search_match_count}")
+                print(f"[DEBUG] current_match_index property: {self.current_match_index}")
+                
+                # Navigate to first match
+                first_page = matches[0][0]
+                self.goto_page(first_page)
+                
+                self.emit_complete_operation(f"Found {self._total_matches} matches across {len(matches)} pages")
+            else:
+                self.emit_complete_operation("No matches found")
+                self.search_results_changed.emit()
+                
+        except Exception as e:
+            self.emit_error_operation(f"Search error: {str(e)}")
+    
+    @Slot()
+    def next_search_match(self) -> None:
+        """F1.5: Navigate to next search match."""
+        if not self._search_results or self._total_matches == 0:
+            return
+        
+        # Move to next match
+        self._current_match_index = (self._current_match_index + 1) % self._total_matches
+        self._navigate_to_current_match()
+        self.current_match_changed.emit()
+    
+    @Slot()
+    def previous_search_match(self) -> None:
+        """F1.5: Navigate to previous search match."""
+        if not self._search_results or self._total_matches == 0:
+            return
+        
+        # Move to previous match
+        self._current_match_index = (self._current_match_index - 1) % self._total_matches
+        self._navigate_to_current_match()
+        self.current_match_changed.emit()
+    
+    def _navigate_to_current_match(self) -> None:
+        """Navigate to the current search match."""
+        if not self._search_results:
+            return
+        
+        # Find which page and which match on that page
+        match_count = 0
+        for page_num, rects in self._search_results:
+            if match_count + len(rects) > self._current_match_index:
+                # Current match is on this page
+                self.goto_page(page_num)
+                match_index_on_page = self._current_match_index - match_count
+                self.emit_complete_operation(
+                    f"Match {self._current_match_index + 1} of {self._total_matches} (Page {page_num})"
+                )
+                return
+            match_count += len(rects)
+    
+    @Slot()
+    def clear_search(self) -> None:
+        """F1.5: Clear search results."""
+        self._search_results = []
+        self._current_match_index = 0
+        self._total_matches = 0
+        self.search_results_changed.emit()
+        self.current_match_changed.emit()
+        self.emit_complete_operation("Search cleared")
     
     def cleanup(self) -> None:
         """Cleanup resources."""

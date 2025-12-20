@@ -25,6 +25,7 @@ class ViewingModel(QObject):
     document_loaded_changed = Signal()
     current_image_changed = Signal()
     filename_changed = Signal()
+    view_mode_changed = Signal()
     
     def __init__(self):
         """Initialize model with default values."""
@@ -36,6 +37,7 @@ class ViewingModel(QObject):
         self._document_loaded = False
         self._current_image: Optional[QImage] = None
         self._filename = ""
+        self._view_mode = "single"  # single, two_page, or scroll
     
     # Current Page (1-indexed for UI)
     def get_current_page(self) -> int:
@@ -102,6 +104,17 @@ class ViewingModel(QObject):
             self.filename_changed.emit()
     
     filename = Property(str, get_filename, set_filename, notify=filename_changed)
+    
+    # View Mode
+    def get_view_mode(self) -> str:
+        return self._view_mode
+    
+    def set_view_mode(self, value: str) -> None:
+        if self._view_mode != value:
+            self._view_mode = value
+            self.view_mode_changed.emit()
+    
+    view_mode = Property(str, get_view_mode, set_view_mode, notify=view_mode_changed)
     
     # Current Image (for internal use, not exposed as Property)
     def set_current_image(self, image: Optional[QImage]) -> None:

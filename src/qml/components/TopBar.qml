@@ -17,6 +17,12 @@ Rectangle {
     signal saveClicked()
     signal searchClicked(string query)
     
+    // Function to focus search field (called by Ctrl+F/Cmd+F)
+    function focusSearchField() {
+        searchField.forceActiveFocus()
+        searchField.selectAll()
+    }
+    
     height: Theme.topBarHeight
     color: Colors.surface
     
@@ -62,9 +68,9 @@ Rectangle {
             }
         }
         
-        // Search Bar
+        // Search Bar with Results
         Rectangle {
-            Layout.preferredWidth: 300
+            Layout.preferredWidth: 400
             Layout.preferredHeight: 40
             radius: Theme.radiusLarge
             color: Colors.surfaceVariant
@@ -101,7 +107,79 @@ Rectangle {
                         color: "transparent"
                     }
                     
-                    onAccepted: topBar.searchClicked(text)
+                    // Debounced search
+                    property var searchTimer: Timer {
+                        interval: 500
+                        onTriggered: {
+                            if (searchField.text.length > 0) {
+                                viewingController.search_in_pdf(searchField.text, false, false)
+                            } else {
+                                viewingController.clear_search()
+                            }
+                        }
+                    }
+                    
+                    onTextChanged: {
+                        console.log("Search text changed:", text)
+                        if (text.length > 0) {
+                            searchTimer.restart()
+                        } else {
+                            searchTimer.stop()
+                            viewingController.clear_search()
+                        }
+                    }
+                    
+                    onAccepted: {
+                        console.log("Search accepted:", text)
+                        searchTimer.stop()
+                        if (text.length > 0) {
+                            console.log("Calling search_in_pdf with:", text)
+                            viewingController.search_in_pdf(text, false, false)
+                        }
+                    }
+                }
+                
+                // Match Counter
+                Text {
+                    text: viewingController.search_match_count > 0 ? 
+                          (viewingController.current_match_index + " of " + viewingController.search_match_count) : ""
+                    font.pixelSize: Typography.bodySmallSize
+                    font.family: Typography.fontFamily
+                    color: Colors.textSecondary
+                    visible: viewingController.search_match_count > 0
+                }
+                
+                // Previous Match Button
+                IconButton {
+                    iconSource: "⬆️"
+                    text: "Previous match"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    visible: viewingController.search_match_count > 0
+                    onClicked: viewingController.previous_search_match()
+                }
+                
+                // Next Match Button
+                IconButton {
+                    iconSource: "⬇️"
+                    text: "Next match"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    visible: viewingController.search_match_count > 0
+                    onClicked: viewingController.next_search_match()
+                }
+                
+                // Clear Search Button
+                IconButton {
+                    iconSource: "✖️"
+                    text: "Clear search"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    visible: searchField.text.length > 0
+                    onClicked: {
+                        searchField.text = ""
+                        viewingController.clear_search()
+                    }
                 }
             }
         }
