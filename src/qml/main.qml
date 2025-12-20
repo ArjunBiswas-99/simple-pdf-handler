@@ -1,0 +1,415 @@
+import QtQuick 6.0
+import QtQuick.Controls 6.0
+import QtQuick.Layouts 6.0
+import "styles"
+import "components"
+
+/**
+ * Simple PDF Handler - Professional Main Window
+ * CEO-Ready Demo UI
+ */
+ApplicationWindow {
+    id: mainWindow
+    
+    visible: true
+    width: 1400
+    height: 900
+    minimumWidth: 1200
+    minimumHeight: 700
+    title: "PDF Handler Pro"
+    
+    color: Colors.background
+    
+    // Remove default window decorations for modern look (optional)
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | 
+           Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | 
+           Qt.WindowCloseButtonHint
+    
+    // Main Layout
+    RowLayout {
+        anchors.fill: parent
+        spacing: 0
+        
+        // Left Sidebar Navigation
+        Sidebar {
+            id: sidebar
+            Layout.fillHeight: true
+            
+            onItemClicked: function(itemId) {
+                console.log("Navigation item clicked:", itemId)
+                contentArea.currentView = itemId
+                updateTopBarTitle(itemId)
+            }
+        }
+        
+        // Main Content Area
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: Colors.background
+            
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+                
+                // Top Command Bar
+                TopBar {
+                    id: topBar
+                    Layout.fillWidth: true
+                    
+                    title: "View PDF"
+                    subtitle: "No document loaded"
+                    
+                    onOpenFileClicked: {
+                        console.log("Open file clicked")
+                        viewingController.open_file()
+                        topBar.subtitle = "sample.pdf - Page 1 of 10"
+                    }
+                    
+                    onSaveClicked: {
+                        console.log("Save clicked")
+                        fileOperationsController.save_file()
+                    }
+                    
+                    onSearchClicked: function(query) {
+                        console.log("Search:", query)
+                    }
+                }
+                
+                // Content Stack View
+                Rectangle {
+                    id: contentArea
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    color: Colors.background
+                    
+                    property string currentView: "view"
+                    
+                    // View PDF Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "view"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        // Drop shadow
+                        layer.enabled: true
+                        layer.effect: ShaderEffect {
+                            property color shadowColor: Colors.shadow
+                        }
+                        
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacing6
+                            spacing: Theme.spacing4
+                            
+                            // Toolbar
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.spacing3
+                                
+                                Text {
+                                    text: "PDF Viewer"
+                                    font.pixelSize: Typography.titleMediumSize
+                                    font.weight: Typography.titleMediumWeight
+                                    color: Colors.textPrimary
+                                    Layout.fillWidth: true
+                                }
+                                
+                                SecondaryButton {
+                                    text: "Zoom In"
+                                    iconSource: "+"
+                                    onClicked: viewingController.zoom_in()
+                                }
+                                
+                                SecondaryButton {
+                                    text: "Zoom Out"
+                                    iconSource: "-"
+                                    onClicked: viewingController.zoom_out()
+                                }
+                                
+                                SecondaryButton {
+                                    text: "Rotate"
+                                    iconSource: "↻"
+                                    onClicked: viewingController.rotate()
+                                }
+                            }
+                            
+                            // PDF Viewer Area (Placeholder)
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: Colors.surfaceVariant
+                                radius: Theme.radiusMedium
+                                border.color: Colors.border
+                                border.width: 1
+                                
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: Theme.spacing4
+                                    
+                                    Text {
+                                        text: "📄"
+                                        font.pixelSize: 72
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    Text {
+                                        text: "PDF Viewer Area"
+                                        font.pixelSize: Typography.headlineSmallSize
+                                        font.weight: Font.Medium
+                                        color: Colors.textPrimary
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    Text {
+                                        text: "Open a PDF file to view it here"
+                                        font.pixelSize: Typography.bodyMediumSize
+                                        color: Colors.textSecondary
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    PrimaryButton {
+                                        text: "Open PDF"
+                                        iconSource: "📂"
+                                        Layout.alignment: Qt.AlignHCenter
+                                        Layout.topMargin: Theme.spacing4
+                                        onClicked: {
+                                            viewingController.open_file()
+                                            topBar.subtitle = "sample.pdf - Page 1 of 10"
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Page Navigation
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignHCenter
+                                spacing: Theme.spacing3
+                                
+                                IconButton {
+                                    iconSource: "⟨"
+                                    text: "Previous Page"
+                                    onClicked: viewingController.previous_page()
+                                }
+                                
+                                Text {
+                                    text: "Page 1 of 10"
+                                    font.pixelSize: Typography.bodyMediumSize
+                                    color: Colors.textSecondary
+                                }
+                                
+                                IconButton {
+                                    iconSource: "⟩"
+                                    text: "Next Page"
+                                    onClicked: viewingController.next_page()
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Edit Content (Placeholder for other views)
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "edit"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✏️ Edit PDF View\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // Annotate Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "annotate"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "💬 Annotate View\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // Pages Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "pages"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "📑 Page Management\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // Merge Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "merge"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "🔗 Merge PDFs\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // Convert Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "convert"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "🔄 Convert PDFs\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // OCR Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "ocr"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "🔍 OCR (Text Recognition)\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // Files Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "files"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "📁 File Operations\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                    
+                    // Settings Content
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacing6
+                        visible: contentArea.currentView === "settings"
+                        color: Colors.surface
+                        radius: Theme.radiusLarge
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "⚙️ Settings\n(Coming Soon)"
+                            font.pixelSize: Typography.headlineSmallSize
+                            color: Colors.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                }
+                
+                // Professional Status Bar
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Theme.statusBarHeight
+                    color: Colors.surface
+                    
+                    // Top border
+                    Rectangle {
+                        anchors.top: parent.top
+                        width: parent.width
+                        height: 1
+                        color: Colors.divider
+                    }
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spacing6
+                        anchors.rightMargin: Theme.spacing6
+                        spacing: Theme.spacing4
+                        
+                        Text {
+                            text: "Ready"
+                            font.pixelSize: Typography.bodySmallSize
+                            color: Colors.textSecondary
+                            Layout.fillWidth: true
+                        }
+                        
+                        Text {
+                            text: "Zoom: 100%"
+                            font.pixelSize: Typography.bodySmallSize
+                            color: Colors.textSecondary
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 1
+                            Layout.preferredHeight: 16
+                            color: Colors.divider
+                        }
+                        
+                        Text {
+                            text: "v1.0.0"
+                            font.pixelSize: Typography.bodySmallSize
+                            color: Colors.textTertiary
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Helper function to update top bar title
+    function updateTopBarTitle(itemId) {
+        var titles = {
+            "view": "View PDF",
+            "edit": "Edit PDF",
+            "annotate": "Annotate PDF",
+            "pages": "Page Management",
+            "merge": "Merge PDFs",
+            "convert": "Convert PDF",
+            "ocr": "OCR - Text Recognition",
+            "files": "File Operations",
+            "settings": "Settings"
+        }
+        topBar.title = titles[itemId] || "PDF Handler"
+    }
+}

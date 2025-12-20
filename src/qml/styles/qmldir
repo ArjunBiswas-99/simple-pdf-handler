@@ -1,0 +1,6 @@
+# QML Module Definition for Styles
+# Required for singleton imports
+
+singleton Colors 1.0 Colors.qml
+singleton Typography 1.0 Typography.qml
+singleton Theme 1.0 Theme.qml
