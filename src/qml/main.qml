@@ -1,6 +1,7 @@
 import QtQuick 6.0
 import QtQuick.Controls 6.0
 import QtQuick.Layouts 6.0
+import QtQuick.Dialogs
 import "styles"
 import "components"
 
@@ -20,10 +21,40 @@ ApplicationWindow {
     
     color: Colors.background
     
+    // File Dialog for opening PDFs
+    FileDialog {
+        id: openFileDialog
+        title: "Open PDF File"
+        nameFilters: ["PDF files (*.pdf)", "All files (*)"]
+        currentFolder: "file://" + viewingController.get_last_directory()
+        
+        onAccepted: {
+            console.log("Selected file:", selectedFile)
+            viewingController.load_pdf_file(selectedFile.toString())
+        }
+    }
+    
     // Remove default window decorations for modern look (optional)
     flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | 
            Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | 
            Qt.WindowCloseButtonHint
+    
+    // Listen to viewing controller events
+    Connections {
+        target: viewingController
+        
+        function onDocument_opened(filename) {
+            topBar.subtitle = filename + " - Page 1 of " + viewingController.page_count
+        }
+        
+        function onPage_changed(current, total) {
+            topBar.subtitle = viewingController.filename + " - Page " + current + " of " + total
+        }
+        
+        function onZoom_changed(zoom) {
+            statusBarZoomText.text = "Zoom: " + zoom + "%"
+        }
+    }
     
     // Main Layout
     RowLayout {
@@ -62,8 +93,7 @@ ApplicationWindow {
                     
                     onOpenFileClicked: {
                         console.log("Open file clicked")
-                        viewingController.open_file()
-                        topBar.subtitle = "sample.pdf - Page 1 of 10"
+                        openFileDialog.open()
                     }
                     
                     onSaveClicked: {
@@ -136,7 +166,7 @@ ApplicationWindow {
                                 }
                             }
                             
-                            // PDF Viewer Area (Placeholder)
+                            // PDF Viewer Area
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
@@ -145,9 +175,18 @@ ApplicationWindow {
                                 border.color: Colors.border
                                 border.width: 1
                                 
+                                // Show PDF viewer if document loaded, otherwise show empty state
+                                PDFViewer {
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spacing2
+                                    visible: viewingController.document_loaded
+                                }
+                                
+                                // Empty state
                                 ColumnLayout {
                                     anchors.centerIn: parent
                                     spacing: Theme.spacing4
+                                    visible: !viewingController.document_loaded
                                     
                                     Text {
                                         text: "📄"
@@ -176,8 +215,7 @@ ApplicationWindow {
                                         Layout.alignment: Qt.AlignHCenter
                                         Layout.topMargin: Theme.spacing4
                                         onClicked: {
-                                            viewingController.open_file()
-                                            topBar.subtitle = "sample.pdf - Page 1 of 10"
+                                            openFileDialog.open()
                                         }
                                     }
                                 }
@@ -188,15 +226,17 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Layout.alignment: Qt.AlignHCenter
                                 spacing: Theme.spacing3
+                                visible: viewingController.document_loaded
                                 
                                 IconButton {
                                     iconSource: "⟨"
                                     text: "Previous Page"
+                                    enabled: viewingController.current_page > 1
                                     onClicked: viewingController.previous_page()
                                 }
                                 
                                 Text {
-                                    text: "Page 1 of 10"
+                                    text: "Page " + viewingController.current_page + " of " + viewingController.page_count
                                     font.pixelSize: Typography.bodyMediumSize
                                     color: Colors.textSecondary
                                 }
@@ -204,6 +244,7 @@ ApplicationWindow {
                                 IconButton {
                                     iconSource: "⟩"
                                     text: "Next Page"
+                                    enabled: viewingController.current_page < viewingController.page_count
                                     onClicked: viewingController.next_page()
                                 }
                             }
@@ -375,6 +416,7 @@ ApplicationWindow {
                         }
                         
                         Text {
+                            id: statusBarZoomText
                             text: "Zoom: 100%"
                             font.pixelSize: Typography.bodySmallSize
                             color: Colors.textSecondary

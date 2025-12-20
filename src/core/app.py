@@ -11,8 +11,10 @@ from typing import Optional
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtCore import QObject
 
+from .settings_manager import SettingsManager
 from .theme_manager import ThemeManager
 from ..features.viewing.controller import ViewingController
+from ..features.viewing.image_provider import PDFImageProvider
 from ..features.editing.controller import EditingController
 from ..features.page_management.controller import PageManagementController
 from ..features.annotation.controller import AnnotationController
@@ -40,11 +42,21 @@ class PDFHandlerApp(QObject):
         super().__init__()
         self._engine = engine
         
+        # Initialize settings manager
+        self._settings_manager = SettingsManager()
+        
         # Initialize theme manager
         self._theme_manager = ThemeManager()
         
-        # Initialize all feature controllers
-        self._viewing_controller = ViewingController()
+        # Initialize PDF image provider
+        self._pdf_image_provider = PDFImageProvider()
+        
+        # Initialize all feature controllers (pass settings where needed)
+        self._viewing_controller = ViewingController(self._settings_manager)
+        
+        # Give controller direct access to image provider (no signal connection needed)
+        self._viewing_controller.set_image_provider(self._pdf_image_provider)
+        
         self._editing_controller = EditingController()
         self._page_management_controller = PageManagementController()
         self._annotation_controller = AnnotationController()
@@ -60,7 +72,13 @@ class PDFHandlerApp(QObject):
         Makes controllers accessible from QML via context properties.
         Each controller is registered with a descriptive name.
         """
+        # Register PDF image provider with QML engine
+        self._engine.addImageProvider("pdfimage", self._pdf_image_provider)
+        
         root_context = self._engine.rootContext()
+        
+        # Register settings manager
+        root_context.setContextProperty("settingsManager", self._settings_manager)
         
         # Register theme manager
         root_context.setContextProperty("themeManager", self._theme_manager)
@@ -74,6 +92,11 @@ class PDFHandlerApp(QObject):
         root_context.setContextProperty("conversionController", self._conversion_controller)
         root_context.setContextProperty("ocrController", self._ocr_controller)
         root_context.setContextProperty("fileOperationsController", self._file_operations_controller)
+    
+    @property
+    def settings_manager(self) -> SettingsManager:
+        """Returns settings manager instance."""
+        return self._settings_manager
     
     @property
     def theme_manager(self) -> ThemeManager:

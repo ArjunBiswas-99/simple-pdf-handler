@@ -1,178 +1,286 @@
 """
 Simple PDF Handler - Viewing Controller
 
-F1: Controls PDF viewing and navigation operations.
+F1: Controls PDF viewing operations with settings persistence.
 
 Copyright (C) 2024
 Licensed under GNU General Public License v3.0
 """
 
-from typing import Optional
-from PySide6.QtCore import Signal, Slot, Property
+from PySide6.QtCore import Signal, Slot, Property, QUrl
+from PySide6.QtGui import QImage
+from pathlib import Path
 from src.core.base_controller import BaseController
+from src.core.settings_manager import SettingsManager
 from .model import ViewingModel
+from .pdf_renderer import PDFRenderer
 
 
 class ViewingController(BaseController):
     """
-    Controls PDF viewing and navigation operations.
-    
-    Manages document loading, page navigation, zoom controls,
-    and text search functionality. Provides mock implementation
-    for UI development.
-    
-    Signals:
-        document_loaded: Emitted when document loads (str: file_path)
-        page_changed: Emitted when page changes (int: page_number)
-        zoom_changed: Emitted when zoom changes (float: zoom_level)
-        search_completed: Emitted when search completes (int: result_count)
+    Controls PDF viewing operations.
+    Implements F1.1 - F1.6 with settings persistence.
     """
     
-    document_loaded = Signal(str)
-    page_changed = Signal(int)
-    zoom_changed = Signal(float)
-    search_completed = Signal(int)
+    # Signals for Property change notifications
+    current_page_changed = Signal()
+    page_count_changed = Signal()
+    zoom_level_changed = Signal()
+    document_loaded_changed = Signal()
+    filename_changed = Signal()
     
-    def __init__(self):
-        """Initializes viewing controller with model."""
+    # Signals for events
+    page_changed = Signal(int, int)  # current, total
+    zoom_changed = Signal(int)
+    rotation_changed = Signal(int)
+    document_opened = Signal(str)  # filename
+    pdf_image_updated = Signal(QImage)  # emits rendered page image
+    
+    def __init__(self, settings_manager: SettingsManager):
+        """
+        Initialize viewing controller.
+        
+        Args:
+            settings_manager: Application settings manager
+        """
         super().__init__()
         self._model = ViewingModel()
+        self._renderer = PDFRenderer()
+        self._settings = settings_manager
+        self._current_filepath = ""
+        self._image_provider = None  # Will be set by app
     
-    @Slot(str, result=bool)
-    def open_document(self, file_path: str) -> bool:
+    # Properties exposed to QML
+    @Property(int, notify=current_page_changed)
+    def current_page(self) -> int:
+        """Get current page (1-indexed)."""
+        return self._model.current_page
+    
+    @Property(int, notify=page_count_changed)
+    def page_count(self) -> int:
+        """Get total page count."""
+        return self._model.page_count
+    
+    @Property(int, notify=zoom_level_changed)
+    def zoom_level(self) -> int:
+        """Get current zoom level."""
+        return self._model.zoom_level
+    
+    @Property(bool, notify=document_loaded_changed)
+    def document_loaded(self) -> bool:
+        """Check if document is loaded."""
+        return self._model.document_loaded
+    
+    @Property(str, notify=filename_changed)
+    def filename(self) -> str:
+        """Get current filename."""
+        return self._model.filename
+    
+    @Slot(result=str)
+    def get_last_directory(self) -> str:
+        """Get last opened directory for file dialog."""
+        return self._settings.get_last_directory()
+    
+    @Slot()
+    def open_file(self) -> None:
         """
-        Opens PDF document from file path.
+        F1.1: Trigger file dialog from QML.
+        This is a placeholder - actual file dialog is in QML.
+        """
+        self.emit_start_operation("Opening file dialog...")
+    
+    @Slot(str)
+    def load_pdf_file(self, file_url: str) -> None:
+        """
+        F1.1: Load PDF file from QML FileDialog.
         
         Args:
-            file_path: Absolute path to PDF file
-            
-        Returns:
-            True if document loaded successfully
+            file_url: File URL from QML (file:///path/to/file.pdf)
         """
-        self.emit_start_operation("Opening document...")
+        # Convert QML file URL to path
+        if file_url.startswith('file://'):
+            filepath = QUrl(file_url).toLocalFile()
+            self._load_pdf(filepath)
+    
+    def _load_pdf(self, filepath: str) -> None:
+        """
+        Load PDF file and render first page.
         
-        success = self._model.load_document(file_path)
+        Args:
+            filepath: Path to PDF file
+        """
+        self.emit_start_operation(f"Loading PDF: {Path(filepath).name}...")
         
-        if success:
-            self.document_loaded.emit(file_path)
-            self.page_changed.emit(1)
-            self.zoom_changed.emit(100.0)
-            self.emit_complete_operation("Document loaded successfully")
+        # Open PDF with renderer
+        if self._renderer.open_pdf(filepath):
+            self._current_filepath = filepath
+            
+            # Update settings
+            self._settings.update_last_directory(filepath)
+            self._settings.add_recent_file(filepath)
+            
+            # Update model and emit change signals
+            self._model.set_filename(Path(filepath).name)
+            self.filename_changed.emit()
+            
+            self._model.set_page_count(self._renderer.get_page_count())
+            self.page_count_changed.emit()
+            
+            self._model.set_current_page(1)
+            self.current_page_changed.emit()
+            
+            self._model.set_document_loaded(True)
+            self.document_loaded_changed.emit()
+            
+            # Reset zoom and rotation
+            self._renderer.set_zoom(100)
+            self._renderer.rotation = 0
+            self._model.set_zoom_level(100)
+            self.zoom_level_changed.emit()
+            
+            self._model.set_rotation(0)
+            
+            # Render first page
+            self._render_current_page()
+            
+            self.emit_complete_operation(f"Loaded: {self._model.filename}")
+            self.document_opened.emit(self._model.filename)
         else:
-            self.emit_error("Failed to load document")
-        
-        return success
+            self.emit_error_operation(f"Failed to load PDF: {Path(filepath).name}")
+    
+    def set_image_provider(self, provider):
+        """Set the image provider reference."""
+        self._image_provider = provider
+    
+    def _render_current_page(self) -> None:
+        """Render the current page and emit the image."""
+        # Explicitly pass the current page to avoid any caching issues
+        image = self._renderer.render_page(self._renderer.current_page)
+        if image:
+            self._model.set_current_image(image)
+            # Update provider FIRST, BEFORE emitting signal
+            if self._image_provider:
+                self._image_provider.set_image(image)
+            # NOW emit signal to QML (provider already has the new image)
+            self.pdf_image_updated.emit(image)
+    
+    @Slot()
+    def next_page(self) -> None:
+        """F1.3: Navigate to next page."""
+        if self._renderer.next_page():
+            # Renderer is 0-indexed, model displays 1-indexed
+            new_page = self._renderer.current_page + 1
+            self._model.set_current_page(new_page)
+            self.current_page_changed.emit()
+            self._render_current_page()
+            self.page_changed.emit(new_page, self._model.page_count)
+            self.emit_complete_operation(f"Page {new_page} of {self._model.page_count}")
+    
+    @Slot()
+    def previous_page(self) -> None:
+        """F1.3: Navigate to previous page."""
+        if self._renderer.previous_page():
+            # Renderer is 0-indexed, model displays 1-indexed
+            new_page = self._renderer.current_page + 1
+            self._model.set_current_page(new_page)
+            self.current_page_changed.emit()
+            self._render_current_page()
+            self.page_changed.emit(new_page, self._model.page_count)
+            self.emit_complete_operation(f"Page {new_page} of {self._model.page_count}")
     
     @Slot(int)
-    def goto_page(self, page_number: int) -> None:
+    def goto_page(self, page_num: int) -> None:
         """
-        Navigates to specified page number.
+        F1.3: Jump to specific page.
         
         Args:
-            page_number: Target page number (1-based)
+            page_num: Page number (1-indexed)
         """
-        if self._model.set_current_page(page_number):
-            self.page_changed.emit(page_number)
-    
-    @Slot()
-    def goto_first_page(self) -> None:
-        """Navigates to first page of document."""
-        self.goto_page(1)
-    
-    @Slot()
-    def goto_last_page(self) -> None:
-        """Navigates to last page of document."""
-        self.goto_page(self._model.total_pages)
-    
-    @Slot()
-    def goto_next_page(self) -> None:
-        """Navigates to next page if available."""
-        current = self._model.current_page
-        if current < self._model.total_pages:
-            self.goto_page(current + 1)
-    
-    @Slot()
-    def goto_previous_page(self) -> None:
-        """Navigates to previous page if available."""
-        current = self._model.current_page
-        if current > 1:
-            self.goto_page(current - 1)
-    
-    @Slot(float)
-    def set_zoom(self, zoom_level: float) -> None:
-        """
-        Sets zoom level for document display.
-        
-        Args:
-            zoom_level: Zoom percentage (50-200)
-        """
-        if self._model.set_zoom_level(zoom_level):
-            self.zoom_changed.emit(zoom_level)
+        if self._renderer.set_page(page_num - 1):  # Convert to 0-indexed
+            self._model.set_current_page(page_num)
+            self.current_page_changed.emit()
+            self._render_current_page()
+            self.page_changed.emit(self._model.current_page, self._model.page_count)
+            self.emit_complete_operation(f"Page {self._model.current_page} of {self._model.page_count}")
     
     @Slot()
     def zoom_in(self) -> None:
-        """Increases zoom by 25%."""
-        current = self._model.zoom_level
-        self.set_zoom(min(200, current + 25))
+        """F1.2: Increase zoom level."""
+        new_zoom = self._renderer.zoom_in()
+        self._model.set_zoom_level(new_zoom)
+        self.zoom_level_changed.emit()
+        self._render_current_page()
+        self.zoom_changed.emit(new_zoom)
+        self.emit_complete_operation(f"Zoom: {new_zoom}%")
     
     @Slot()
     def zoom_out(self) -> None:
-        """Decreases zoom by 25%."""
-        current = self._model.zoom_level
-        self.set_zoom(max(50, current - 25))
+        """F1.2: Decrease zoom level."""
+        new_zoom = self._renderer.zoom_out()
+        self._model.set_zoom_level(new_zoom)
+        self.zoom_level_changed.emit()
+        self._render_current_page()
+        self.zoom_changed.emit(new_zoom)
+        self.emit_complete_operation(f"Zoom: {new_zoom}%")
     
-    @Slot(str)
-    def search_text(self, query: str) -> None:
+    @Slot(int)
+    def set_zoom(self, zoom_level: int) -> None:
         """
-        Searches for text in document.
+        F1.2: Set specific zoom level.
         
         Args:
-            query: Search query text
+            zoom_level: Zoom percentage (25-400)
         """
-        result_count = self._model.search_text(query)
-        self.search_completed.emit(result_count)
+        self._renderer.set_zoom(zoom_level)
+        self._model.set_zoom_level(zoom_level)
+        self.zoom_level_changed.emit()
+        self._render_current_page()
+        self.zoom_changed.emit(zoom_level)
+        self.emit_complete_operation(f"Zoom: {zoom_level}%")
+    
+    @Slot()
+    def rotate(self) -> None:
+        """F1.4: Rotate page 90 degrees clockwise."""
+        new_rotation = self._renderer.rotate_right()
+        self._model.set_rotation(new_rotation)
+        self._render_current_page()
+        self.rotation_changed.emit(new_rotation)
+        self.emit_complete_operation(f"Rotated: {new_rotation}°")
+    
+    @Slot()
+    def rotate_left(self) -> None:
+        """F1.4: Rotate page 90 degrees counter-clockwise."""
+        new_rotation = self._renderer.rotate_left()
+        self._model.set_rotation(new_rotation)
+        self._render_current_page()
+        self.rotation_changed.emit(new_rotation)
+        self.emit_complete_operation(f"Rotated: {new_rotation}°")
+    
+    @Slot()
+    def fit_width(self) -> None:
+        """F1.6: Fit page to width (mock for now)."""
+        self.emit_complete_operation("Fit to width")
+    
+    @Slot()
+    def fit_height(self) -> None:
+        """F1.6: Fit page to height (mock for now)."""
+        self.emit_complete_operation("Fit to height")
+    
+    @Slot()
+    def toggle_fullscreen(self) -> None:
+        """F1.5: Toggle fullscreen mode (mock for now)."""
+        self.emit_complete_operation("Fullscreen toggled")
+    
+    def get_current_image(self) -> QImage:
+        """
+        Get current rendered page image.
         
-        if result_count > 0:
-            # Navigate to first result
-            first_result = self._model.next_search_result()
-            if first_result:
-                self.goto_page(first_result)
+        Returns:
+            QImage of current page or empty image
+        """
+        image = self._model.get_current_image()
+        return image if image else QImage()
     
-    @Slot()
-    def next_search_result(self) -> None:
-        """Navigates to next search result."""
-        next_page = self._model.next_search_result()
-        if next_page:
-            self.goto_page(next_page)
-    
-    @Slot()
-    def previous_search_result(self) -> None:
-        """Navigates to previous search result."""
-        prev_page = self._model.previous_search_result()
-        if prev_page:
-            self.goto_page(prev_page)
-    
-    @Property(int, notify=page_changed)
-    def current_page(self) -> int:
-        """Returns current page number."""
-        return self._model.current_page
-    
-    @Property(int, notify=document_loaded)
-    def total_pages(self) -> int:
-        """Returns total page count."""
-        return self._model.total_pages
-    
-    @Property(float, notify=zoom_changed)
-    def zoom_level(self) -> float:
-        """Returns current zoom percentage."""
-        return self._model.zoom_level
-    
-    @Property(bool, notify=document_loaded)
-    def has_document(self) -> bool:
-        """Returns whether a document is loaded."""
-        return self._model.has_document
-    
-    @Property(int, notify=search_completed)
-    def search_results_count(self) -> int:
-        """Returns number of search results."""
-        return self._model.search_results_count
+    def cleanup(self) -> None:
+        """Cleanup resources."""
+        self._renderer.close_pdf()
