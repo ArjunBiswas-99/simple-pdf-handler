@@ -49,9 +49,16 @@ pip install -r requirements.txt
 ```
 
 ### 3. Run the Application
+
+**From project root (recommended):**
+```bash
+python3 run.py
+```
+
+**Or from src directory:**
 ```bash
 cd src
-python main.py
+python3 main.py
 ```
 
 ## 📖 Usage
