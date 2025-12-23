@@ -14,6 +14,7 @@ from PySide6.QtGui import QKeySequence, QAction
 from utils.constants import WindowDefaults, AppInfo, Icons
 from utils.config import get_config
 from utils.theme_manager import get_theme_manager
+from core.pdf_document import PDFDocument
 
 from .menu_bar import MenuBar
 from .toolbar import Toolbar
@@ -43,6 +44,9 @@ class MainWindow(QMainWindow):
         
         self.config = get_config()
         self.theme_manager = get_theme_manager()
+        
+        # PDF document handler
+        self.pdf_document = PDFDocument()
         
         # State tracking
         self._current_document = None
@@ -122,10 +126,22 @@ class MainWindow(QMainWindow):
         self.toolbar_widget.zoom_in_requested.connect(self._handle_zoom_in)
         self.toolbar_widget.zoom_out_requested.connect(self._handle_zoom_out)
         self.toolbar_widget.rotate_requested.connect(self._handle_rotate)
+        self.toolbar_widget.select_text_toggled.connect(self.content_area.set_selection_mode)
         
         # Welcome screen actions
         self.welcome_screen.open_file_requested.connect(self._handle_open_file)
         self.welcome_screen.recent_file_selected.connect(self._handle_open_recent)
+        
+        # PDF document signals
+        self.pdf_document.document_loaded.connect(self._on_document_loaded)
+        self.pdf_document.document_closed.connect(self._on_document_closed)
+        self.pdf_document.error_occurred.connect(self._on_pdf_error)
+        
+        # Content area signals
+        self.content_area.page_changed.connect(self._on_page_changed)
+        self.content_area.text_copied.connect(self._on_text_copied)
+        self.content_area.text_selected.connect(self._on_text_selected)
+        self.content_area.selection_mode_changed.connect(self.toolbar_widget.set_select_text_mode)
         
         # Status bar updates
         self.status_bar_widget.zoom_changed.connect(self._handle_zoom_change)
@@ -158,21 +174,26 @@ class MainWindow(QMainWindow):
     # Action handlers
     def _handle_open_file(self):
         """Handle open file request."""
-        # For Phase 1, just show a message
-        QMessageBox.information(
+        from PySide6.QtWidgets import QFileDialog
+        
+        # Get last used directory
+        last_dir = self.config.get_last_directory()
+        
+        # Show file dialog
+        file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Open File",
-            "File opening will be implemented in Phase 2.\n\n"
-            "This feature will allow you to browse and open PDF files."
+            "Open PDF File",
+            last_dir,
+            "PDF Files (*.pdf);;All Files (*.*)"
         )
         
-        # TODO Phase 2: Implement actual file opening
-        # from PySide6.QtWidgets import QFileDialog
-        # file_path, _ = QFileDialog.getOpenFileName(
-        #     self, "Open PDF", "", "PDF Files (*.pdf)"
-        # )
-        # if file_path:
-        #     self._open_document(file_path)
+        if file_path:
+            # Save the directory for next time
+            from pathlib import Path
+            self.config.set_last_directory(str(Path(file_path).parent))
+            
+            # Open the document
+            self._open_document(file_path)
     
     def _handle_close_file(self):
         """Handle close file request."""
@@ -315,25 +336,106 @@ class MainWindow(QMainWindow):
     
     def _open_document(self, file_path: str):
         """
-        Open a document (Phase 2 implementation placeholder).
+        Open a PDF document.
         
         Args:
             file_path: Path to the document to open
         """
-        self._current_document = file_path
-        self._is_modified = False
+        # Try to open the PDF
+        if self.pdf_document.open(file_path):
+            self._current_document = file_path
+            self._is_modified = False
+            
+            # Add to recent files
+            self.config.add_recent_file(file_path)
+            
+            # Update UI state
+            self._update_window_state()
+            
+            # Notify components
+            self.document_opened.emit(file_path)
+            
+            # Update status
+            from pathlib import Path
+            filename = Path(file_path).name
+            self.status_bar_widget.show_message(f"Opened: {filename}", 3000)
+        else:
+            # Error opening document (error signal will be emitted)
+            pass
+    
+    def _on_document_loaded(self):
+        """Handle successful PDF document loading."""
+        # Pass PDF document to content area for continuous rendering
+        self.content_area.set_pdf_document(self.pdf_document)
         
-        # Add to recent files
-        self.config.add_recent_file(file_path)
+        # Update status bar with page info
+        self.status_bar_widget.set_page_info(1, self.pdf_document.page_count)
+    
+    def _on_document_closed(self):
+        """Handle PDF document closing."""
+        # Clear content area
+        self.content_area.clear_content()
         
-        # Update UI state
-        self._update_window_state()
+        # Reset status bar
+        self.status_bar_widget.set_page_info(0, 0)
+    
+    def _on_pdf_error(self, error_message: str):
+        """
+        Handle PDF errors.
         
-        # Notify components
-        self.document_opened.emit(file_path)
+        Args:
+            error_message: Error description
+        """
+        QMessageBox.critical(
+            self,
+            "PDF Error",
+            f"An error occurred:\n\n{error_message}"
+        )
+    
+    def _on_page_changed(self, page_number: int):
+        """
+        Handle page change in content area.
         
-        # Update status
-        self.status_bar_widget.show_message(f"Opened: {file_path}", 3000)
+        Args:
+            page_number: New page number (0-indexed)
+        """
+        # Update status bar
+        self.status_bar_widget.set_page_info(page_number + 1, self.pdf_document.page_count)
+    
+    def _on_text_copied(self, message: str):
+        """
+        Handle text copied event from content area.
+        
+        Args:
+            message: Feedback message to display
+        """
+        # Show message in status bar
+        self.status_bar_widget.show_message(message, 3000)
+    
+    def _on_text_selected(self, message: str):
+        """
+        Handle text selected event from content area.
+        
+        Args:
+            message: Feedback message to display
+        """
+        # Show message in status bar
+        self.status_bar_widget.show_message(message, 5000)  # Longer duration for selection message
+    
+    def _render_current_page(self):
+        """Render the current page and display it."""
+        if not self.pdf_document.is_open:
+            return
+        
+        # Get current page
+        page_num = self.pdf_document.current_page
+        
+        # Render page
+        pixmap = self.pdf_document.render_page(page_num)
+        
+        if pixmap:
+            # Display in content area
+            self.content_area.display_page(pixmap, page_num)
     
     # Window event handlers
     def closeEvent(self, event):

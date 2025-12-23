@@ -200,8 +200,11 @@ class ThemeManager:
         }}
         
         QToolButton:checked {{
-            background-color: {c['active']};
-            border: 2px solid {c['primary']};
+            background-color: {c['background']};
+            border: 1px solid {c['border']};
+            border-bottom: 2px solid {c['primary']};
+            border-radius: 4px 4px 0px 0px;
+            font-weight: {Fonts.WEIGHT_SEMIBOLD};
         }}
         
         QToolButton:disabled {{

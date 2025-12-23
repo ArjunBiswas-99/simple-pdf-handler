@@ -244,6 +244,27 @@ class Config:
         """
         self.settings.setValue("editor/auto_save_interval", minutes)
     
+    # File dialog preferences
+    def get_last_directory(self) -> str:
+        """
+        Get last used directory for file dialogs.
+        
+        Returns:
+            Directory path, or home directory if not set
+        """
+        from pathlib import Path
+        default_dir = str(Path.home())
+        return self.settings.value("file/last_directory", default_dir, str)
+    
+    def set_last_directory(self, directory: str) -> None:
+        """
+        Save last used directory.
+        
+        Args:
+            directory: Directory path
+        """
+        self.settings.setValue("file/last_directory", directory)
+    
     # Utility methods
     def reset_to_defaults(self) -> None:
         """Reset all settings to default values."""

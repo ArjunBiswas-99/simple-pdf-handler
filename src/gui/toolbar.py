@@ -34,6 +34,8 @@ class Toolbar(QToolBar):
     zoom_out_requested = Signal()
     rotate_requested = Signal()
     
+    select_text_toggled = Signal(bool)  # Emitted when select text mode is toggled
+    
     def __init__(self, parent=None):
         """
         Initialize toolbar.
@@ -49,6 +51,7 @@ class Toolbar(QToolBar):
         
         self._document_actions = []
         self._current_tab = "Home"
+        self._select_text_button = None  # Reference to select text toggle button
         
         self._create_toolbar()
     
@@ -93,22 +96,15 @@ class Toolbar(QToolBar):
     
     def _create_tab_selector(self) -> QWidget:
         """
-        Create tab selector button group.
+        Create tab selector button group (horizontal ribbon-style).
         
         Returns:
             Widget containing tab buttons
         """
         widget = QWidget()
-        layout = QVBoxLayout(widget)
+        layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
-        
-        # Label
-        label = QLabel("Tools:")
-        label_font = QFont()
-        label_font.setPointSize(Fonts.SIZE_SMALL)
-        label.setFont(label_font)
-        layout.addWidget(label)
         
         # Button group for exclusive selection
         self.tab_buttons = QButtonGroup(self)
@@ -120,7 +116,9 @@ class Toolbar(QToolBar):
             btn = QToolButton()
             btn.setText(tab)
             btn.setCheckable(True)
-            btn.setAutoRaise(True)
+            btn.setAutoRaise(False)
+            btn.setMinimumWidth(80)
+            btn.setMinimumHeight(28)
             btn.clicked.connect(lambda checked, t=tab: self._switch_tab(t))
             
             if tab == "Home":
@@ -195,6 +193,12 @@ class Toolbar(QToolBar):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(Spacing.MEDIUM)
         
+        # Mode selection group with toggle button
+        mode_group = self._create_mode_selection_group()
+        layout.addWidget(mode_group)
+        
+        layout.addWidget(self._create_separator())
+        
         # Undo/Redo group
         history_group = self._create_tool_group("History", [
             (f"{Icons.UNDO}\nUndo", "Undo (Ctrl+Z)", self.undo_requested.emit, True),
@@ -220,6 +224,50 @@ class Toolbar(QToolBar):
             ("🗑\nDelete", "Delete selected", lambda: self._show_coming_soon("Delete"), True),
         ])
         layout.addWidget(selection_group)
+        
+        return widget
+    
+    def _create_mode_selection_group(self) -> QWidget:
+        """
+        Create mode selection group with Select Text toggle button.
+        
+        Returns:
+            Widget containing mode selection tools
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        
+        # Group title
+        title_label = QLabel("Mode")
+        title_font = QFont()
+        title_font.setPointSize(Fonts.SIZE_SMALL)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Select Text toggle button
+        self._select_text_button = QToolButton()
+        self._select_text_button.setText("🖱\nSelect Text")
+        self._select_text_button.setToolTip(
+            "Toggle text selection mode\n\n"
+            "When ON: Click and drag to select text\n"
+            "When OFF: Click and drag to pan\n"
+            "Tip: Hold Spacebar for temporary pan mode"
+        )
+        self._select_text_button.setCheckable(True)
+        self._select_text_button.setChecked(False)  # Default to pan mode
+        self._select_text_button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self._select_text_button.setAutoRaise(True)
+        self._select_text_button.setMinimumWidth(80)
+        self._select_text_button.toggled.connect(self.select_text_toggled.emit)
+        
+        # Add to document actions
+        self._document_actions.append(self._select_text_button)
+        
+        layout.addWidget(self._select_text_button)
         
         return widget
     
@@ -426,3 +474,16 @@ class Toolbar(QToolBar):
         """
         for action in self._document_actions:
             action.setEnabled(enabled)
+    
+    def set_select_text_mode(self, enabled: bool):
+        """
+        Set the select text button state (for syncing with ContentArea).
+        
+        Args:
+            enabled: True to check the button, False to uncheck
+        """
+        if self._select_text_button:
+            # Block signals to avoid circular updates
+            self._select_text_button.blockSignals(True)
+            self._select_text_button.setChecked(enabled)
+            self._select_text_button.blockSignals(False)
