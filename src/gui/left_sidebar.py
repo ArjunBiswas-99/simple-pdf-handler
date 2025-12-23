@@ -136,46 +136,32 @@ class LeftSidebar(QDockWidget):
     
     def _create_bookmarks_tab(self):
         """Create bookmarks panel with tree view."""
-        bookmarks_widget = QWidget()
-        layout = QVBoxLayout(bookmarks_widget)
-        layout.setSpacing(Spacing.SMALL)
+        from .bookmark_tree_widget import BookmarkPanel
         
-        # Header
-        title = QLabel("Bookmarks")
-        title_font = QFont()
-        title_font.setWeight(QFont.Weight.DemiBold)
-        title.setFont(title_font)
-        layout.addWidget(title)
+        # Create bookmark panel
+        self.bookmarks_panel = BookmarkPanel()
+        self.bookmarks_panel.bookmark_selected.connect(self._on_bookmark_selected)
         
-        # Bookmarks tree
-        self.bookmarks_tree = QTreeWidget()
-        self.bookmarks_tree.setHeaderHidden(True)
-        self.bookmarks_tree.setIndentation(20)
-        layout.addWidget(self.bookmarks_tree)
+        # Placeholder message (shown when no bookmarks)
+        self.bookmarks_placeholder = QLabel(
+            f"{Icons.BOOKMARKS}\n\nNo bookmarks\n\n"
+            "(Bookmarks from PDF will appear here)"
+        )
+        self.bookmarks_placeholder.setAlignment(Qt.AlignCenter)
+        self.bookmarks_placeholder.setProperty("secondary", True)
         
-        # Placeholder message
-        placeholder = QLabel(f"{Icons.BOOKMARKS}\n\nNo bookmarks\n\n(Bookmarks from PDF will appear here)")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setProperty("secondary", True)
-        layout.addWidget(placeholder)
+        # Container to switch between panel and placeholder
+        bookmarks_container = QWidget()
+        bookmarks_layout = QVBoxLayout(bookmarks_container)
+        bookmarks_layout.setContentsMargins(0, 0, 0, 0)
+        bookmarks_layout.addWidget(self.bookmarks_panel)
+        bookmarks_layout.addWidget(self.bookmarks_placeholder)
         
-        # Action buttons
-        button_layout = QHBoxLayout()
-        add_btn = QPushButton("Add")
-        add_btn.clicked.connect(lambda: self._show_coming_soon("Add Bookmark"))
-        button_layout.addWidget(add_btn)
+        # Initially show placeholder
+        self.bookmarks_panel.hide()
+        self.bookmarks_placeholder.show()
         
-        edit_btn = QPushButton("Edit")
-        edit_btn.clicked.connect(lambda: self._show_coming_soon("Edit Bookmark"))
-        button_layout.addWidget(edit_btn)
-        
-        delete_btn = QPushButton("Delete")
-        delete_btn.clicked.connect(lambda: self._show_coming_soon("Delete Bookmark"))
-        button_layout.addWidget(delete_btn)
-        
-        layout.addLayout(button_layout)
-        
-        self.tabs.addTab(bookmarks_widget, Icons.BOOKMARKS)
+        self.tabs.addTab(bookmarks_container, Icons.BOOKMARKS)
         self.tabs.setTabToolTip(1, "Bookmarks")
     
     def _create_comments_tab(self):
@@ -506,6 +492,17 @@ class LeftSidebar(QDockWidget):
         """Update annotation indicator for a page."""
         self.pages_grid.set_page_has_annotations(page_num, has_annotations)
     
+    def _on_bookmark_selected(self, page_num: int, top: float):
+        """
+        Handle bookmark selection.
+        
+        Args:
+            page_num: Page number (0-indexed)
+            top: Vertical position on page
+        """
+        # Emit page_selected signal for navigation
+        self.page_selected.emit(page_num)
+    
     def load_bookmarks(self, bookmarks: list):
         """
         Load document bookmarks.
@@ -513,8 +510,24 @@ class LeftSidebar(QDockWidget):
         Args:
             bookmarks: List of bookmark data
         """
-        self.bookmarks_tree.clear()
-        # TODO Phase 2: Populate bookmark tree
+        if bookmarks and len(bookmarks) > 0:
+            # Show panel, hide placeholder
+            self.bookmarks_placeholder.hide()
+            self.bookmarks_panel.show()
+            self.bookmarks_panel.load_bookmarks(bookmarks)
+        else:
+            # Show placeholder, hide panel
+            self.bookmarks_panel.hide()
+            self.bookmarks_placeholder.show()
+    
+    def update_bookmark_current_page(self, page_num: int):
+        """
+        Update current page indicator in bookmarks.
+        
+        Args:
+            page_num: Current page number (0-indexed)
+        """
+        self.bookmarks_panel.set_current_page(page_num)
     
     def clear(self):
         """Clear all content when document is closed."""
@@ -528,8 +541,12 @@ class LeftSidebar(QDockWidget):
             self.thumbnail_generator.cancel()
             self.thumbnail_generator = None
         
+        # Clear bookmarks
+        self.bookmarks_panel.clear()
+        self.bookmarks_panel.hide()
+        self.bookmarks_placeholder.show()
+        
         # Clear other tabs
-        self.bookmarks_tree.clear()
         self.comments_list.clear()
         self.layers_list.clear()
         self.page_counter.setText("0 pages")

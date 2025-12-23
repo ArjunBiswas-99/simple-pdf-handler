@@ -161,6 +161,7 @@ class MainWindow(QMainWindow):
         # Content area signals
         self.content_area.page_changed.connect(self._on_page_changed)
         self.content_area.page_changed.connect(self.left_sidebar.set_current_page)
+        self.content_area.page_changed.connect(self.left_sidebar.update_bookmark_current_page)
         self.content_area.text_copied.connect(self._on_text_copied)
         self.content_area.text_selected.connect(self._on_text_selected)
         self.content_area.image_selected.connect(self._on_image_selected)
@@ -482,6 +483,10 @@ class MainWindow(QMainWindow):
         
         # Load page thumbnails in sidebar
         self.left_sidebar.load_pages(self.pdf_document.page_count, self.pdf_document)
+        
+        # Load bookmarks in sidebar
+        bookmarks = self.pdf_document.get_bookmarks()
+        self.left_sidebar.load_bookmarks(bookmarks)
     
     def _on_document_closed(self):
         """Handle PDF document closing."""
