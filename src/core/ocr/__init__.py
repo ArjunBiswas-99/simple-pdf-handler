@@ -8,8 +8,8 @@ Provides comprehensive OCR capabilities for PDF documents including:
 - Confidence scoring and verification
 - Export to multiple formats (Word, Excel, Text)
 
-This module uses PaddleOCR as the primary OCR engine for high accuracy
-and performance across multiple languages.
+This module uses EasyOCR as the primary OCR engine for high accuracy
+and performance across 80+ languages including Bengali, Chinese, and more.
 """
 
 # Version info

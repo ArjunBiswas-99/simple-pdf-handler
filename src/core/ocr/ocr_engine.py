@@ -1,7 +1,7 @@
 """
 OCR Engine - Core text recognition functionality.
 
-Provides the primary interface to PaddleOCR for text recognition with
+Provides the primary interface to EasyOCR for text recognition with
 support for multiple languages and configurable recognition parameters.
 """
 
@@ -44,7 +44,7 @@ class OCRResult:
 
 class OCREngine:
     """
-    Main OCR engine using PaddleOCR for text recognition.
+    Main OCR engine using EasyOCR for text recognition.
     
     Handles initialization of the OCR model, language selection,
     and text recognition with confidence scoring.
@@ -55,38 +55,46 @@ class OCREngine:
         Initialize OCR engine.
         
         Args:
-            language: Language code for OCR ('en', 'es', 'zh', etc.)
+            language: Language code for OCR ('en', 'bn', 'zh_sim', etc.)
             use_gpu: Whether to use GPU acceleration (if available)
         """
-        # Convert 'auto' to 'en' as PaddleOCR doesn't support auto-detection
-        # English models work well for most Latin-script languages
+        # Convert 'auto' to 'en' as default
         if language == 'auto':
             language = 'en'
         
         self.language = language
         self.use_gpu = use_gpu
         self._ocr_instance = None
+        self._current_languages = []
         self._initialize_engine()
     
     def _initialize_engine(self) -> None:
         """
-        Initialize PaddleOCR instance.
+        Initialize EasyOCR instance.
         
         Lazy initialization to avoid loading the model until needed.
         """
         try:
-            from paddleocr import PaddleOCR
+            import easyocr
             
-            # Initialize PaddleOCR with specified language
-            # Using minimal parameters for maximum compatibility
-            self._ocr_instance = PaddleOCR(
-                use_angle_cls=True,  # Enable text orientation detection
-                lang=self.language,
+            # Build language list for EasyOCR
+            # EasyOCR can load multiple languages at once
+            lang_list = [self.language]
+            
+            # Always include English for better mixed-language support
+            if 'en' not in lang_list:
+                lang_list.insert(0, 'en')
+            
+            # Initialize EasyOCR Reader
+            self._ocr_instance = easyocr.Reader(
+                lang_list,
+                gpu=self.use_gpu
             )
+            self._current_languages = lang_list
             
         except ImportError:
             raise ImportError(
-                "PaddleOCR not installed. Please install with: pip install paddleocr"
+                "EasyOCR not installed. Please install with: pip install easyocr"
             )
         except Exception as e:
             raise RuntimeError(f"Failed to initialize OCR engine: {str(e)}")
@@ -121,65 +129,48 @@ class OCREngine:
             raise RuntimeError("OCR engine not initialized")
         
         try:
-            # Run OCR
-            results = self._ocr_instance.ocr(image)
+            # Run OCR with EasyOCR
+            # Returns list of (bbox, text, confidence) tuples
+            results = self._ocr_instance.readtext(image)
             
-            # Parse results with flexible structure handling
+            # Parse EasyOCR results
             ocr_results = []
-            if results and len(results) > 0:
-                # Handle both list and nested list structures
-                lines = results[0] if isinstance(results[0], list) else results
-                
-                if lines:
-                    for line in lines:
-                        try:
-                            # Try to extract data - format may vary by version
-                            if isinstance(line, (list, tuple)) and len(line) >= 2:
-                                bbox = line[0]
-                                text_info = line[1]
-                                
-                                # Extract text and confidence
-                                if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
-                                    text = str(text_info[0]) if text_info[0] else ""
-                                    confidence = float(text_info[1]) if text_info[1] else 0.0
-                                elif isinstance(text_info, str):
-                                    text = text_info
-                                    confidence = 1.0  # Default if no confidence provided
-                                else:
-                                    continue  # Skip malformed entries
-                                
-                                # Skip empty text
-                                if not text or not text.strip():
-                                    continue
-                                
-                                # Filter by confidence threshold
-                                if confidence >= min_confidence:
-                                    # Convert bbox to simple format [x1, y1, x2, y2]
-                                    if isinstance(bbox, list) and len(bbox) >= 4:
-                                        x_coords = [point[0] for point in bbox if isinstance(point, (list, tuple))]
-                                        y_coords = [point[1] for point in bbox if isinstance(point, (list, tuple))]
-                                        
-                                        if x_coords and y_coords:
-                                            simple_bbox = [
-                                                min(x_coords),
-                                                min(y_coords),
-                                                max(x_coords),
-                                                max(y_coords)
-                                            ]
-                                        else:
-                                            simple_bbox = [0, 0, 100, 100]  # Default bbox
-                                    else:
-                                        simple_bbox = [0, 0, 100, 100]  # Default bbox
-                                    
-                                    ocr_results.append(OCRResult(
-                                        text=text,
-                                        confidence=confidence,
-                                        bbox=simple_bbox,
-                                        language=self.language
-                                    ))
-                        except (IndexError, ValueError, TypeError) as parse_error:
-                            # Skip malformed lines but continue processing
-                            continue
+            
+            for result in results:
+                try:
+                    # EasyOCR format: (bbox, text, confidence)
+                    # bbox is list of 4 points: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+                    bbox_points = result[0]
+                    text = result[1]
+                    confidence = result[2]
+                    
+                    # Skip empty text
+                    if not text or not text.strip():
+                        continue
+                    
+                    # Filter by confidence threshold
+                    if confidence >= min_confidence:
+                        # Convert bbox points to simple format [x1, y1, x2, y2]
+                        x_coords = [point[0] for point in bbox_points]
+                        y_coords = [point[1] for point in bbox_points]
+                        
+                        simple_bbox = [
+                            min(x_coords),
+                            min(y_coords),
+                            max(x_coords),
+                            max(y_coords)
+                        ]
+                        
+                        ocr_results.append(OCRResult(
+                            text=text,
+                            confidence=confidence,
+                            bbox=simple_bbox,
+                            language=self.language
+                        ))
+                        
+                except (IndexError, ValueError, TypeError) as parse_error:
+                    # Skip malformed results but continue processing
+                    continue
             
             return ocr_results
             
@@ -293,7 +284,7 @@ class OCREngine:
         
         # Simple heuristics for common languages
         if any('\u4e00' <= char <= '\u9fff' for char in text):
-            return 'zh'  # Chinese
+            return 'zh_sim'  # Chinese Simplified
         elif any('\u0600' <= char <= '\u06ff' for char in text):
             return 'ar'  # Arabic
         elif any('\u0900' <= char <= '\u097f' for char in text):
@@ -310,6 +301,7 @@ class OCREngine:
     def cleanup(self) -> None:
         """Clean up OCR engine resources."""
         self._ocr_instance = None
+        self._current_languages = []
     
     def __del__(self):
         """Destructor to clean up resources."""

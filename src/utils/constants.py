@@ -209,37 +209,63 @@ class Icons:
 
 
 class OCRLanguages:
-    """OCR language definitions and metadata."""
+    """OCR language definitions and metadata for EasyOCR."""
     
-    # Pre-installed languages (6 default languages)
-    PRE_INSTALLED = ['en', 'es', 'zh', 'hi', 'bn', 'de']
+    # Most commonly used languages (pre-loaded by default)
+    PRE_INSTALLED = ['en', 'bn', 'zh_sim']
     
-    # Language metadata: code -> (name, size_mb)
+    # Language metadata: code -> (name, script)
+    # EasyOCR supports 80+ languages - listing key languages here
     LANGUAGES = {
-        # Pre-installed
-        'en': ('English', 3.5),
-        'es': ('Spanish', 4.2),
-        'zh': ('Chinese Simplified', 18.1),
-        'hi': ('Hindi', 11.2),
-        'bn': ('Bengali', 10.8),
-        'de': ('German', 4.5),
+        # Latin script languages
+        'en': ('English', 'Latin'),
+        'es': ('Spanish', 'Latin'),
+        'fr': ('French', 'Latin'),
+        'de': ('German', 'Latin'),
+        'it': ('Italian', 'Latin'),
+        'pt': ('Portuguese', 'Latin'),
+        'nl': ('Dutch', 'Latin'),
+        'pl': ('Polish', 'Latin'),
+        'tr': ('Turkish', 'Latin'),
+        'id': ('Indonesian', 'Latin'),
+        'ms': ('Malay', 'Latin'),
+        'tl': ('Tagalog', 'Latin'),
+        'vi': ('Vietnamese', 'Latin'),
+        'ro': ('Romanian', 'Latin'),
+        'cs': ('Czech', 'Latin'),
+        'sv': ('Swedish', 'Latin'),
+        'no': ('Norwegian', 'Latin'),
+        'da': ('Danish', 'Latin'),
+        'fi': ('Finnish', 'Latin'),
         
-        # Additional available languages
-        'fr': ('French', 4.3),
-        'it': ('Italian', 4.1),
-        'pt': ('Portuguese', 4.2),
-        'ru': ('Russian', 12.5),
-        'ja': ('Japanese', 15.8),
-        'ko': ('Korean', 13.2),
-        'ar': ('Arabic', 9.8),
-        'th': ('Thai', 8.5),
-        'vi': ('Vietnamese', 7.2),
-        'nl': ('Dutch', 4.0),
-        'pl': ('Polish', 4.8),
-        'tr': ('Turkish', 5.1),
-        'id': ('Indonesian', 3.9),
-        'ms': ('Malay', 3.7),
-        'tl': ('Tagalog', 3.8),
+        # Cyrillic script languages
+        'ru': ('Russian', 'Cyrillic'),
+        'uk': ('Ukrainian', 'Cyrillic'),
+        'bg': ('Bulgarian', 'Cyrillic'),
+        'sr_cyrl': ('Serbian (Cyrillic)', 'Cyrillic'),
+        
+        # Asian languages
+        'zh_sim': ('Chinese (Simplified)', 'Chinese'),
+        'zh_tra': ('Chinese (Traditional)', 'Chinese'),
+        'ja': ('Japanese', 'Japanese'),
+        'ko': ('Korean', 'Korean'),
+        'th': ('Thai', 'Thai'),
+        
+        # Indian languages
+        'hi': ('Hindi', 'Devanagari'),
+        'bn': ('Bengali', 'Bengali'),
+        'ta': ('Tamil', 'Tamil'),
+        'te': ('Telugu', 'Telugu'),
+        'kn': ('Kannada', 'Kannada'),
+        'mr': ('Marathi', 'Devanagari'),
+        
+        # Arabic script languages
+        'ar': ('Arabic', 'Arabic'),
+        'fa': ('Persian', 'Arabic'),
+        'ur': ('Urdu', 'Arabic'),
+        
+        # Other scripts
+        'he': ('Hebrew', 'Hebrew'),
     }
     
     @classmethod

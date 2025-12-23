@@ -248,15 +248,30 @@ class PDFSaveWorker(QThread):
             self.progress_updated.emit(95, 100, "Saving PDF...")
             print(f"DEBUG: Saving to {self.output_path}")
             
-            if self.compress:
-                doc.save(
-                    self.output_path,
-                    garbage=4,  # Maximum compression
-                    deflate=True,
-                    clean=True
-                )
+            # Use incremental save for large PDFs to avoid memory issues
+            # For PDFs with 100+ pages, use less aggressive compression
+            if len(doc) > 100:
+                print(f"DEBUG: Large PDF ({len(doc)} pages), using moderate compression")
+                if self.compress:
+                    doc.save(
+                        self.output_path,
+                        garbage=2,  # Moderate compression for large files
+                        deflate=True,
+                        incremental=False
+                    )
+                else:
+                    doc.save(self.output_path, incremental=False)
             else:
-                doc.save(self.output_path)
+                # Small PDFs can use maximum compression
+                if self.compress:
+                    doc.save(
+                        self.output_path,
+                        garbage=4,  # Maximum compression
+                        deflate=True,
+                        clean=True
+                    )
+                else:
+                    doc.save(self.output_path)
             
             print("DEBUG: PDF saved successfully")
             doc.close()
