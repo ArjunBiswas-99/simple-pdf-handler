@@ -36,6 +36,10 @@ class Toolbar(QToolBar):
     
     select_text_toggled = Signal(bool)  # Emitted when select text mode is toggled
     
+    # Annotation signals
+    highlight_mode_toggled = Signal(bool)  # Emitted when highlight mode is toggled
+    annotation_color_changed = Signal(tuple)  # Emitted when annotation color changes (RGB 0-255)
+    
     def __init__(self, parent=None):
         """
         Initialize toolbar.
@@ -273,7 +277,7 @@ class Toolbar(QToolBar):
     
     def _create_annotate_tools(self) -> QWidget:
         """
-        Create Annotate tab tools.
+        Create Annotate tab tools with working highlight and colors.
         
         Returns:
             Widget containing Annotate tools
@@ -283,11 +287,16 @@ class Toolbar(QToolBar):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(Spacing.MEDIUM)
         
-        # Markup group
-        markup_group = self._create_tool_group("Markup", [
-            (f"{Icons.HIGHLIGHT}\nHighlight", "Highlight text", lambda: self._show_coming_soon("Highlight"), True),
-            ("📝\nUnderline", "Underline text", lambda: self._show_coming_soon("Underline"), True),
-            ("⚡\nStrikethrough", "Strikethrough text", lambda: self._show_coming_soon("Strikethrough"), True),
+        # Highlight group with toggle button and color picker
+        highlight_group = self._create_highlight_group()
+        layout.addWidget(highlight_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Markup group (coming soon features)
+        markup_group = self._create_tool_group("More Markup", [
+            ("📝\nUnderline", "Underline text (Coming soon)", lambda: self._show_coming_soon("Underline"), True),
+            ("⚡\nStrikeout", "Strikethrough text (Coming soon)", lambda: self._show_coming_soon("Strikethrough"), True),
         ])
         layout.addWidget(markup_group)
         
@@ -295,22 +304,154 @@ class Toolbar(QToolBar):
         
         # Comments group
         comments_group = self._create_tool_group("Comments", [
-            (f"{Icons.COMMENT}\nComment", "Add comment", lambda: self._show_coming_soon("Comment"), True),
-            (f"{Icons.NOTE}\nNote", "Add sticky note", lambda: self._show_coming_soon("Note"), True),
+            (f"{Icons.COMMENT}\nComment", "Add comment (Coming soon)", lambda: self._show_coming_soon("Comment"), True),
+            (f"{Icons.NOTE}\nNote", "Add sticky note (Coming soon)", lambda: self._show_coming_soon("Note"), True),
         ])
         layout.addWidget(comments_group)
         
-        layout.addWidget(self._create_separator())
+        return widget
+    
+    def _create_highlight_group(self) -> QWidget:
+        """
+        Create highlight group with toggle button and color picker.
         
-        # Drawing group
-        drawing_group = self._create_tool_group("Drawing", [
-            (f"{Icons.STAMP}\nStamp", "Add stamp", lambda: self._show_coming_soon("Stamp"), True),
-            ("🔺\nShapes", "Draw shapes", lambda: self._show_coming_soon("Shapes"), True),
-            ("📏\nMeasure", "Measurement tool", lambda: self._show_coming_soon("Measure"), True),
-        ])
-        layout.addWidget(drawing_group)
+        Returns:
+            Widget containing highlight tools
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        
+        # Group title
+        title_label = QLabel("Highlight")
+        title_font = QFont()
+        title_font.setPointSize(Fonts.SIZE_SMALL)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Container for button and colors
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(Spacing.SMALL)
+        
+        # Highlight toggle button
+        self._highlight_button = QToolButton()
+        self._highlight_button.setText(f"{Icons.HIGHLIGHT}\nHighlight")
+        self._highlight_button.setToolTip(
+            "Toggle highlight mode\n\n"
+            "When ON: Select text to highlight\n"
+            "Press ESC to cancel\n"
+            "Highlights are saved IN the PDF!"
+        )
+        self._highlight_button.setCheckable(True)
+        self._highlight_button.setChecked(False)
+        self._highlight_button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self._highlight_button.setAutoRaise(True)
+        self._highlight_button.setMinimumWidth(70)
+        self._highlight_button.setFixedHeight(50)
+        self._highlight_button.toggled.connect(self._on_highlight_toggled)
+        self._document_actions.append(self._highlight_button)
+        content_layout.addWidget(self._highlight_button)
+        
+        # Color picker (4 colors)
+        colors_layout = QVBoxLayout()
+        colors_layout.setSpacing(2)
+        
+        # Row 1: Yellow, Green
+        row1 = QHBoxLayout()
+        row1.setSpacing(2)
+        self._color_yellow = self._create_color_button((255, 255, 0), "Yellow", True)  # Default
+        self._color_green = self._create_color_button((0, 255, 0), "Green", False)
+        row1.addWidget(self._color_yellow)
+        row1.addWidget(self._color_green)
+        colors_layout.addLayout(row1)
+        
+        # Row 2: Blue, Pink
+        row2 = QHBoxLayout()
+        row2.setSpacing(2)
+        self._color_blue = self._create_color_button((0, 191, 255), "Blue", False)
+        self._color_pink = self._create_color_button((255, 105, 180), "Pink", False)
+        row2.addWidget(self._color_blue)
+        row2.addWidget(self._color_pink)
+        colors_layout.addLayout(row2)
+        
+        content_layout.addLayout(colors_layout)
+        
+        layout.addLayout(content_layout)
+        
+        # Button group for exclusive color selection
+        self._color_button_group = QButtonGroup(self)
+        self._color_button_group.setExclusive(True)
+        self._color_button_group.addButton(self._color_yellow)
+        self._color_button_group.addButton(self._color_green)
+        self._color_button_group.addButton(self._color_blue)
+        self._color_button_group.addButton(self._color_pink)
         
         return widget
+    
+    def _create_color_button(self, color_rgb: tuple, name: str, checked: bool) -> QToolButton:
+        """
+        Create a color selection button.
+        
+        Args:
+            color_rgb: RGB tuple 0-255
+            name: Color name for tooltip
+            checked: Whether button starts checked
+            
+        Returns:
+            Color button
+        """
+        btn = QToolButton()
+        btn.setCheckable(True)
+        btn.setChecked(checked)
+        btn.setAutoRaise(False)
+        btn.setFixedSize(22, 22)
+        btn.setToolTip(f"{name} highlight color")
+        
+        # Set button color using stylesheet
+        r, g, b = color_rgb
+        btn.setStyleSheet(f"""
+            QToolButton {{
+                background-color: rgb({r}, {g}, {b});
+                border: 2px solid #888;
+                border-radius: 3px;
+            }}
+            QToolButton:checked {{
+                border: 2px solid #000;
+                border-width: 3px;
+            }}
+            QToolButton:hover {{
+                border: 2px solid #000;
+            }}
+        """)
+        
+        # Connect to color change
+        btn.clicked.connect(lambda: self._on_color_selected(color_rgb))
+        
+        # Mark as document action
+        self._document_actions.append(btn)
+        
+        return btn
+    
+    def _on_highlight_toggled(self, checked: bool):
+        """
+        Handle highlight button toggle.
+        
+        Args:
+            checked: Whether button is checked
+        """
+        self.highlight_mode_toggled.emit(checked)
+    
+    def _on_color_selected(self, color_rgb: tuple):
+        """
+        Handle color button click.
+        
+        Args:
+            color_rgb: RGB tuple 0-255
+        """
+        self.annotation_color_changed.emit(color_rgb)
     
     def _create_page_tools(self) -> QWidget:
         """

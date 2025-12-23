@@ -78,6 +78,11 @@ class ContentArea(QGraphicsView):
         self._selected_image = None  # Tuple: (page_num, xref, width, height, pixmap)
         self._selected_image_border = None  # QGraphicsRectItem for orange border
         
+        # Annotation mode state
+        self._annotation_mode = None  # 'highlight', 'underline', 'strikeout', 'comment', 'note', 'rectangle', 'circle'
+        self._annotation_color = (1, 1, 0)  # Yellow default (RGB 0-1)
+        self._annotation_color_rgb = (255, 255, 0)  # For Qt display (RGB 0-255)
+        
         # Show placeholder
         self._show_placeholder()
     
@@ -429,8 +434,8 @@ class ContentArea(QGraphicsView):
             event: Mouse press event
         """
         if event.button() == Qt.LeftButton:
-            # Check if in selection mode and not holding spacebar
-            if self._selection_mode and not self._spacebar_pressed:
+            # Check if in selection mode OR annotation mode and not holding spacebar
+            if (self._selection_mode or self._annotation_mode) and not self._spacebar_pressed:
                 # Selection mode: Check if click is on an image first
                 click_pos = self.mapToScene(event.pos())
                 image_info = self._find_image_at_position(click_pos)
@@ -545,6 +550,51 @@ class ContentArea(QGraphicsView):
         # Add to scene
         self.scene.addItem(self._selection_rect_item)
     
+    def set_annotation_mode(self, mode: str = None):
+        """
+        Set annotation mode and update cursor.
+        
+        Args:
+            mode: Annotation type ('highlight', 'underline', etc.) or None to disable
+        """
+        self._annotation_mode = mode
+        self._update_annotation_cursor()
+    
+    def set_annotation_color(self, color_rgb: tuple):
+        """
+        Set annotation color.
+        
+        Args:
+            color_rgb: RGB tuple 0-255 (e.g., (255, 255, 0) for yellow)
+        """
+        # Store Qt format (0-255)
+        self._annotation_color_rgb = color_rgb
+        
+        # Convert to PDF format (0-1)
+        self._annotation_color = (
+            color_rgb[0] / 255.0,
+            color_rgb[1] / 255.0,
+            color_rgb[2] / 255.0
+        )
+    
+    def _update_annotation_cursor(self):
+        """Update cursor based on current annotation mode."""
+        if self._annotation_mode is None:
+            # No annotation mode - use normal cursor logic
+            self._update_cursor_and_drag_mode()
+        elif self._annotation_mode in ['highlight', 'underline', 'strikeout']:
+            # Text selection cursor for text markup
+            self.viewport().setCursor(Qt.IBeamCursor)
+            self.setDragMode(QGraphicsView.NoDrag)
+        elif self._annotation_mode == 'comment':
+            # Arrow cursor for point-and-click
+            self.viewport().setCursor(Qt.ArrowCursor)
+            self.setDragMode(QGraphicsView.NoDrag)
+        elif self._annotation_mode in ['sticky_note', 'rectangle', 'circle']:
+            # Crosshair for drawing
+            self.viewport().setCursor(Qt.CrossCursor)
+            self.setDragMode(QGraphicsView.NoDrag)
+    
     def keyPressEvent(self, event):
         """
         Handle key press events.
@@ -552,19 +602,48 @@ class ContentArea(QGraphicsView):
         Args:
             event: Key event
         """
-        if event.key() == Qt.Key_Space and not event.isAutoRepeat():
+        # Check for undo/redo shortcuts first (Cmd+Z, Cmd+Shift+Z, Cmd+Y)
+        modifiers = event.modifiers()
+        key = event.key()
+        
+        # Cmd/Ctrl modifier detection
+        is_command_ctrl = modifiers & (Qt.ControlModifier | Qt.MetaModifier)
+        
+        # Pass undo/redo shortcuts to parent MainWindow
+        if is_command_ctrl:
+            if key == Qt.Key_Z and not (modifiers & Qt.ShiftModifier):
+                # Cmd+Z / Ctrl+Z: Undo - let parent handle it
+                event.ignore()  # Pass to parent
+                return
+            elif key == Qt.Key_Z and (modifiers & Qt.ShiftModifier):
+                # Cmd+Shift+Z: Redo - let parent handle it
+                event.ignore()  # Pass to parent
+                return
+            elif key == Qt.Key_Y:
+                # Cmd+Y / Ctrl+Y: Redo - let parent handle it
+                event.ignore()  # Pass to parent
+                return
+        
+        # Handle our own keys
+        if event.key() == Qt.Key_Escape:
+            # ESC: Cancel annotation mode or clear selection
+            if self._annotation_mode:
+                # Cancel annotation mode
+                self.set_annotation_mode(None)
+                self.clear_selection()
+            else:
+                # Just clear selection
+                self.clear_selection()
+            event.accept()
+        elif event.key() == Qt.Key_Space and not event.isAutoRepeat():
             # Spacebar pressed: Temporarily enable pan mode
             if not self._spacebar_pressed:
                 self._spacebar_pressed = True
                 self._update_cursor_and_drag_mode()
             event.accept()
-        elif event.key() == Qt.Key_C and event.modifiers() & Qt.ControlModifier:
-            # Ctrl+C: Copy selected text
+        elif event.key() == Qt.Key_C and is_command_ctrl:
+            # Ctrl+C / Cmd+C: Copy selected text
             self.copy_selected_text()
-            event.accept()
-        elif event.key() == Qt.Key_Escape:
-            # ESC: Clear selection
-            self.clear_selection()
             event.accept()
         else:
             super().keyPressEvent(event)
@@ -667,6 +746,53 @@ class ContentArea(QGraphicsView):
         
         # Store selected text
         self._selected_text = "\n".join(selected_text_parts)
+        
+        # If in highlight annotation mode, add annotation to PDF
+        if self._annotation_mode == 'highlight' and self._selected_text:
+            # Add highlight annotation to PDF for each page
+            for page_num, page_y_offset in enumerate(self._page_positions):
+                if page_num < len(self._page_items):
+                    page_item = self._page_items[page_num]
+                    
+                    # Get page height
+                    if isinstance(page_item, QGraphicsPixmapItem):
+                        page_height = page_item.pixmap().height()
+                    else:
+                        page_height = page_item.rect().height()
+                    
+                    page_bottom = page_y_offset + page_height
+                    
+                    # Check if selection intersects this page
+                    if sel_y1 >= page_y_offset and sel_y0 <= page_bottom:
+                        # Calculate selection within this page
+                        page_sel_y0 = max(0, sel_y0 - page_y_offset)
+                        page_sel_y1 = min(page_height, sel_y1 - page_y_offset)
+                        
+                        # Convert to PDF coordinates
+                        pdf_x0 = sel_x0 / zoom_factor
+                        pdf_y0 = page_sel_y0 / zoom_factor
+                        pdf_x1 = sel_x1 / zoom_factor
+                        pdf_y1 = page_sel_y1 / zoom_factor
+                        
+                        # Get word boxes for this page
+                        word_boxes = self._pdf_document.get_word_boxes_in_rect(
+                            page_num, (pdf_x0, pdf_y0, pdf_x1, pdf_y1)
+                        )
+                        
+                        if word_boxes:
+                            # Add highlight annotation to PDF
+                            self._pdf_document.add_highlight_annotation(
+                                page_num, 
+                                word_boxes,
+                                self._annotation_color,
+                                0.5  # 50% opacity
+                            )
+                            
+                            # Re-render this page to show the annotation
+                            self._refresh_page(page_num)
+            
+            # Clear selection after adding annotation
+            self.clear_selection()
         
         if self._selected_text:
             # Emit signal for status bar feedback (NOT copied, just selected)
@@ -813,3 +939,29 @@ class ContentArea(QGraphicsView):
             
             # Emit signal for status bar
             self.image_copied.emit(f"Copied image ({width}x{height} px) to clipboard")
+    
+    def _refresh_page(self, page_number: int):
+        """
+        Force re-render of a specific page (e.g., after adding annotation).
+        
+        Args:
+            page_number: Page number to refresh (0-indexed)
+        """
+        if not self._pdf_document or page_number < 0 or page_number >= len(self._page_items):
+            return
+        
+        # Remove old page item
+        old_item = self._page_items[page_number]
+        if old_item.scene():
+            self.scene.removeItem(old_item)
+        
+        # Render page fresh (will show new annotations)
+        pixmap = self._pdf_document.render_page(page_number)
+        
+        if pixmap and not pixmap.isNull():
+            # Add new rendered pixmap
+            rendered_item = self.scene.addPixmap(pixmap)
+            rendered_item.setPos(0, self._page_positions[page_number])
+            
+            # Replace in list
+            self._page_items[page_number] = rendered_item

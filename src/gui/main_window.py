@@ -63,6 +63,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(AppInfo.NAME)
         self.resize(WindowDefaults.WIDTH, WindowDefaults.HEIGHT)
         self.setMinimumSize(WindowDefaults.MIN_WIDTH, WindowDefaults.MIN_HEIGHT)
+        
+        # Add keyboard shortcuts for undo/redo
+        undo_shortcut = QAction(self)
+        undo_shortcut.setShortcut(QKeySequence.Undo)  # Cmd+Z on Mac, Ctrl+Z on Windows/Linux
+        undo_shortcut.triggered.connect(self._handle_undo)
+        self.addAction(undo_shortcut)
+        
+        redo_shortcut = QAction(self)
+        redo_shortcut.setShortcut(QKeySequence.Redo)  # Cmd+Shift+Z on Mac, Ctrl+Y on Windows/Linux
+        redo_shortcut.triggered.connect(self._handle_redo)
+        self.addAction(redo_shortcut)
     
     def _create_components(self):
         """Create all UI components."""
@@ -131,6 +142,10 @@ class MainWindow(QMainWindow):
         self.toolbar_widget.rotate_requested.connect(self._handle_rotate)
         self.toolbar_widget.select_text_toggled.connect(self.content_area.set_selection_mode)
         
+        # Annotation toolbar signals
+        self.toolbar_widget.highlight_mode_toggled.connect(self._handle_highlight_mode)
+        self.toolbar_widget.annotation_color_changed.connect(self.content_area.set_annotation_color)
+        
         # Welcome screen actions
         self.welcome_screen.open_file_requested.connect(self._handle_open_file)
         self.welcome_screen.recent_file_selected.connect(self._handle_open_recent)
@@ -139,6 +154,8 @@ class MainWindow(QMainWindow):
         self.pdf_document.document_loaded.connect(self._on_document_loaded)
         self.pdf_document.document_closed.connect(self._on_document_closed)
         self.pdf_document.error_occurred.connect(self._on_pdf_error)
+        self.pdf_document.document_modified.connect(self._on_document_modified)
+        self.pdf_document.undo_redo_changed.connect(self._on_undo_redo_changed)
         
         # Content area signals
         self.content_area.page_changed.connect(self._on_page_changed)
@@ -168,10 +185,11 @@ class MainWindow(QMainWindow):
         self.toolbar_widget.set_document_actions_enabled(has_document)
         self.right_sidebar.setEnabled(has_document)
         
-        # Update window title
+        # Update window title with asterisk if modified
         if has_document:
             filename = self._current_document.split('/')[-1]
-            modified_marker = "*" if self._is_modified else ""
+            # Use pdf_document.is_modified() for dirty state
+            modified_marker = "*" if self.pdf_document.is_modified() else ""
             self.setWindowTitle(f"{modified_marker}{filename} - {AppInfo.NAME}")
         else:
             self.setWindowTitle(AppInfo.NAME)
@@ -287,13 +305,45 @@ class MainWindow(QMainWindow):
     
     def _handle_undo(self):
         """Handle undo request."""
-        # Phase 1: Show placeholder
-        self.status_bar_widget.show_message("Undo (Phase 2)", 2000)
+        if not self.pdf_document or not self.pdf_document.can_undo():
+            return
+        
+        # Perform undo
+        page_number = self.pdf_document.undo()
+        
+        if page_number is not None:
+            # Refresh the affected page
+            self.content_area._refresh_page(page_number)
+            self.status_bar_widget.show_message("Undone last annotation", 2000)
+        else:
+            self.status_bar_widget.show_message("Nothing to undo", 2000)
     
     def _handle_redo(self):
         """Handle redo request."""
-        # Phase 1: Show placeholder
-        self.status_bar_widget.show_message("Redo (Phase 2)", 2000)
+        if not self.pdf_document or not self.pdf_document.can_redo():
+            return
+        
+        # Perform redo
+        page_number = self.pdf_document.redo()
+        
+        if page_number is not None:
+            # Refresh the affected page
+            self.content_area._refresh_page(page_number)
+            self.status_bar_widget.show_message("Redone annotation", 2000)
+        else:
+            self.status_bar_widget.show_message("Nothing to redo", 2000)
+    
+    def _on_undo_redo_changed(self, can_undo: bool, can_redo: bool):
+        """
+        Handle undo/redo state changes to update button states.
+        
+        Args:
+            can_undo: Whether undo is available
+            can_redo: Whether redo is available
+        """
+        # Buttons are enabled/disabled automatically when document is open/closed
+        # This handler can be used for more fine-grained control if needed
+        pass
     
     def _handle_zoom_in(self):
         """Handle zoom in request."""
@@ -334,6 +384,22 @@ class MainWindow(QMainWindow):
     def _handle_rotate(self):
         """Handle rotate page request."""
         self.status_bar_widget.show_message("Rotate (Phase 2)", 2000)
+    
+    def _handle_highlight_mode(self, enabled: bool):
+        """
+        Handle highlight mode toggle from toolbar.
+        
+        Args:
+            enabled: Whether highlight mode is enabled
+        """
+        if enabled:
+            # Enable highlight mode in content area
+            self.content_area.set_annotation_mode('highlight')
+            self.status_bar_widget.show_message("Highlight mode ON - Select text to highlight, ESC to cancel", 5000)
+        else:
+            # Disable highlight mode
+            self.content_area.set_annotation_mode(None)
+            self.status_bar_widget.show_message("Highlight mode OFF", 2000)
     
     def _handle_zoom_change(self, zoom_level: float):
         """
@@ -477,6 +543,16 @@ class MainWindow(QMainWindow):
         # Show message in status bar
         self.status_bar_widget.show_message(message, 3000)
     
+    def _on_document_modified(self, is_modified: bool):
+        """
+        Handle document modified state change.
+        
+        Args:
+            is_modified: Whether document has unsaved changes
+        """
+        # Update window title to show/hide asterisk
+        self._update_window_state()
+    
     def _render_current_page(self):
         """Render the current page and display it."""
         if not self.pdf_document.is_open:
@@ -500,8 +576,8 @@ class MainWindow(QMainWindow):
         Args:
             event: Close event
         """
-        # Check for unsaved changes
-        if self._is_modified:
+        # Check for unsaved changes using pdf_document
+        if self.pdf_document and self.pdf_document.is_modified():
             reply = QMessageBox.question(
                 self,
                 "Unsaved Changes",
@@ -511,7 +587,7 @@ class MainWindow(QMainWindow):
             
             if reply == QMessageBox.Save:
                 self._handle_save_file()
-                if self._is_modified:  # Save was cancelled
+                if self.pdf_document.is_modified():  # Save was cancelled or failed
                     event.ignore()
                     return
             elif reply == QMessageBox.Cancel:

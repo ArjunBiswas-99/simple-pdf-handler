@@ -24,6 +24,8 @@ class PDFDocument(QObject):
     document_closed = Signal()
     page_rendered = Signal(int)  # page_number
     error_occurred = Signal(str)  # error_message
+    document_modified = Signal(bool)  # modified state changed
+    undo_redo_changed = Signal(bool, bool)  # can_undo, can_redo
     
     def __init__(self):
         """Initialize PDF document handler."""
@@ -37,6 +39,13 @@ class PDFDocument(QObject):
         self._rotation_angles: Dict[int, int] = {}  # page_num: angle
         self._page_cache: Dict[Tuple[int, float, int], QPixmap] = {}  # (page, zoom, rotation): pixmap
         self._max_cache_size: int = 10  # Maximum cached pages
+        
+        # Dirty state tracking for annotations
+        self._modified: bool = False  # Track if document has unsaved changes
+        
+        # Undo/Redo stacks for annotations
+        self._undo_stack: list = []  # Stack of actions that can be undone
+        self._redo_stack: list = []  # Stack of actions that can be redone
         
     def open(self, file_path: str) -> bool:
         """
@@ -64,6 +73,11 @@ class PDFDocument(QObject):
             self._current_page = 0
             self._rotation_angles = {}
             self._page_cache = {}
+            self._modified = False  # Reset modified flag for new document
+            
+            # Reset undo/redo stacks for new document
+            self._undo_stack = []
+            self._redo_stack = []
             
             # Emit success signal
             self.document_loaded.emit()
@@ -461,3 +475,222 @@ class PDFDocument(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Failed to extract image: {str(e)}")
             return None
+    
+    # Dirty state management for annotations
+    def is_modified(self) -> bool:
+        """
+        Check if document has unsaved changes.
+        
+        Returns:
+            True if document has been modified, False otherwise
+        """
+        return self._modified
+    
+    def mark_modified(self):
+        """Mark document as modified (has unsaved changes)."""
+        if not self._modified:
+            self._modified = True
+            self.document_modified.emit(True)
+    
+    def mark_saved(self):
+        """Mark document as saved (no unsaved changes)."""
+        if self._modified:
+            self._modified = False
+            self.document_modified.emit(False)
+    
+    # Undo/Redo system
+    def can_undo(self) -> bool:
+        """Check if undo is available."""
+        return len(self._undo_stack) > 0
+    
+    def can_redo(self) -> bool:
+        """Check if redo is available."""
+        return len(self._redo_stack) > 0
+    
+    def undo(self) -> Optional[int]:
+        """
+        Undo the last annotation action.
+        
+        Returns:
+            Page number that was affected, or None if nothing to undo
+        """
+        if not self.can_undo() or not self._doc:
+            return None
+        
+        try:
+            # Pop last action from undo stack
+            action = self._undo_stack.pop()
+            action_type = action['type']
+            page_number = action['page']
+            annot_xref = action['xref']
+            
+            # Get the page
+            page = self._doc[page_number]
+            
+            # Find and delete the annotation
+            for annot in page.annots():
+                if annot.xref == annot_xref:
+                    page.delete_annot(annot)
+                    break
+            
+            # Push to redo stack
+            self._redo_stack.append(action)
+            
+            # Clear cache for this page
+            keys_to_remove = [k for k in self._page_cache.keys() if k[0] == page_number]
+            for key in keys_to_remove:
+                del self._page_cache[key]
+            
+            # Update modified state if undo stack is empty
+            if not self._undo_stack:
+                self.mark_saved()
+            
+            # Emit state change
+            self.undo_redo_changed.emit(self.can_undo(), self.can_redo())
+            
+            return page_number
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to undo: {str(e)}")
+            return None
+    
+    def redo(self) -> Optional[int]:
+        """
+        Redo the last undone annotation action.
+        
+        Returns:
+            Page number that was affected, or None if nothing to redo
+        """
+        if not self.can_redo() or not self._doc:
+            return None
+        
+        try:
+            # Pop last action from redo stack
+            action = self._redo_stack.pop()
+            action_type = action['type']
+            page_number = action['page']
+            
+            # Re-apply the annotation based on stored data
+            if action_type == 'highlight':
+                word_boxes = action['word_boxes']
+                color = action['color']
+                opacity = action['opacity']
+                
+                # Re-add the highlight
+                page = self._doc[page_number]
+                quads = []
+                for wx0, wy0, wx1, wy1, text in word_boxes:
+                    quad = fitz.Quad(
+                        fitz.Point(wx0, wy0),
+                        fitz.Point(wx1, wy0),
+                        fitz.Point(wx0, wy1),
+                        fitz.Point(wx1, wy1)
+                    )
+                    quads.append(quad)
+                
+                if quads:
+                    annot = page.add_highlight_annot(quads)
+                    annot.set_colors(stroke=color)
+                    annot.set_opacity(opacity)
+                    annot.update()
+                    
+                    # Store the new xref
+                    action['xref'] = annot.xref
+            
+            # Push back to undo stack
+            self._undo_stack.append(action)
+            
+            # Mark as modified
+            self.mark_modified()
+            
+            # Clear cache for this page
+            keys_to_remove = [k for k in self._page_cache.keys() if k[0] == page_number]
+            for key in keys_to_remove:
+                del self._page_cache[key]
+            
+            # Emit state change
+            self.undo_redo_changed.emit(self.can_undo(), self.can_redo())
+            
+            return page_number
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to redo: {str(e)}")
+            return None
+    
+    def _emit_undo_redo_state(self):
+        """Emit undo/redo state change signal."""
+        self.undo_redo_changed.emit(self.can_undo(), self.can_redo())
+    
+    # Annotation methods
+    def add_highlight_annotation(self, page_number: int, word_boxes: list, 
+                                color: Tuple[float, float, float], 
+                                opacity: float = 0.5) -> bool:
+        """
+        Add highlight annotation to PDF.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            word_boxes: List of word bounding boxes [(x0, y0, x1, y1, text), ...]
+            color: RGB tuple with values 0-1 (e.g., (1, 1, 0) for yellow)
+            opacity: Transparency 0-1
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._doc or page_number < 0 or page_number >= self._page_count:
+            return False
+        
+        try:
+            page = self._doc[page_number]
+            
+            # Convert word boxes to quads (quadrilaterals) for PyMuPDF
+            quads = []
+            for wx0, wy0, wx1, wy1, text in word_boxes:
+                # Create quad for this word (4 corner points)
+                quad = fitz.Quad(
+                    fitz.Point(wx0, wy0),  # Top-left
+                    fitz.Point(wx1, wy0),  # Top-right
+                    fitz.Point(wx0, wy1),  # Bottom-left
+                    fitz.Point(wx1, wy1)   # Bottom-right
+                )
+                quads.append(quad)
+            
+            if quads:
+                # Add highlight annotation
+                annot = page.add_highlight_annot(quads)
+                annot.set_colors(stroke=color)
+                annot.set_opacity(opacity)
+                annot.update()
+                
+                # Track action in undo stack
+                action = {
+                    'type': 'highlight',
+                    'page': page_number,
+                    'xref': annot.xref,  # Annotation reference for deletion
+                    'word_boxes': word_boxes,  # Store for redo
+                    'color': color,
+                    'opacity': opacity
+                }
+                self._undo_stack.append(action)
+                
+                # Clear redo stack (new action invalidates redo history)
+                self._redo_stack = []
+                
+                # Emit undo/redo state change
+                self.undo_redo_changed.emit(self.can_undo(), self.can_redo())
+                
+                # Mark document as modified
+                self.mark_modified()
+                
+                # Clear cache for this page to show annotation
+                keys_to_remove = [k for k in self._page_cache.keys() if k[0] == page_number]
+                for key in keys_to_remove:
+                    del self._page_cache[key]
+                
+                return True
+        
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to add highlight: {str(e)}")
+            return False
+        
+        return False
