@@ -318,6 +318,81 @@ class PDFDocument(QObject):
         """
         return self._rotation_angles.get(page_number, 0)
     
+    def render_page_thumbnail(self, page_number: int, max_size: int = 150) -> Optional[QPixmap]:
+        """
+        Render a page as a thumbnail optimized for sidebar display.
+        
+        This method is specifically designed for generating smaller thumbnails
+        efficiently, suitable for the Pages panel in the sidebar.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            max_size: Maximum dimension (width or height) in pixels
+            
+        Returns:
+            QPixmap thumbnail, or None if error
+        """
+        if not self._doc or page_number < 0 or page_number >= self._page_count:
+            return None
+        
+        try:
+            page = self._doc[page_number]
+            
+            # Calculate scaling to fit within max_size while preserving aspect ratio
+            rect = page.rect
+            page_width = rect.width
+            page_height = rect.height
+            
+            # Determine scale factor to fit within max_size
+            if page_width > page_height:
+                scale = max_size / page_width
+            else:
+                scale = max_size / page_height
+            
+            # Create transformation matrix
+            mat = fitz.Matrix(scale, scale)
+            
+            # Apply page rotation if any
+            rotation = self._rotation_angles.get(page_number, 0)
+            if rotation:
+                mat = mat.prerotate(rotation)
+            
+            # Render page to pixmap at thumbnail size
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            
+            # Convert to QImage
+            img_format = QImage.Format_RGB888 if pix.n == 3 else QImage.Format_RGBA8888
+            qimage = QImage(pix.samples, pix.width, pix.height, pix.stride, img_format)
+            
+            # Convert to QPixmap
+            pixmap = QPixmap.fromImage(qimage)
+            
+            return pixmap
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to render thumbnail for page {page_number + 1}: {str(e)}")
+            return None
+    
+    def has_annotations_on_page(self, page_number: int) -> bool:
+        """
+        Check if a page has any annotations.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            True if page has annotations, False otherwise
+        """
+        if not self._doc or page_number < 0 or page_number >= self._page_count:
+            return False
+        
+        try:
+            page = self._doc[page_number]
+            # Check if page has any annotations
+            return page.first_annot is not None
+        except Exception:
+            return False
+    
     def get_text_in_rect(self, page_number: int, rect: Tuple[float, float, float, float]) -> str:
         """
         Extract text within a rectangle on a page.
@@ -504,6 +579,119 @@ class PDFDocument(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Failed to extract image: {str(e)}")
             return None
+    
+    # Bookmark methods
+    def get_bookmarks(self) -> list:
+        """
+        Get document bookmarks (table of contents/outline).
+        
+        Returns:
+            List of bookmark dictionaries with structure:
+            [
+                {
+                    'level': int,      # Hierarchy level (1=top, 2=child, etc.)
+                    'title': str,      # Bookmark title
+                    'page': int,       # Destination page (0-indexed)
+                    'top': float,      # Vertical position on page
+                    'children': []     # Nested child bookmarks
+                },
+                ...
+            ]
+            Empty list if no bookmarks or document not open.
+        """
+        if not self._doc:
+            return []
+        
+        try:
+            # Get table of contents from PDF
+            # Returns: [[level, title, page, top_y], ...]
+            # Note: page is 1-indexed in PyMuPDF TOC
+            toc = self._doc.get_toc()
+            
+            if not toc:
+                return []
+            
+            # Convert flat TOC to hierarchical structure
+            bookmarks = []
+            stack = []  # Stack to track parent bookmarks
+            
+            for item in toc:
+                level = item[0]
+                title = item[1]
+                page = item[2] - 1  # Convert to 0-indexed
+                top = item[3] if len(item) > 3 else 0
+                
+                # Clamp page to valid range
+                if page < 0:
+                    page = 0
+                elif page >= self._page_count:
+                    page = self._page_count - 1
+                
+                bookmark = {
+                    'level': level,
+                    'title': title,
+                    'page': page,
+                    'top': top,
+                    'children': []
+                }
+                
+                # Find parent based on level
+                while stack and stack[-1]['level'] >= level:
+                    stack.pop()
+                
+                if stack:
+                    # Add as child to parent
+                    stack[-1]['children'].append(bookmark)
+                else:
+                    # Top-level bookmark
+                    bookmarks.append(bookmark)
+                
+                # Push to stack for potential children
+                stack.append(bookmark)
+            
+            return bookmarks
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to get bookmarks: {str(e)}")
+            return []
+    
+    def get_bookmark_count(self) -> int:
+        """
+        Get total count of bookmarks in document.
+        
+        Returns:
+            Number of bookmarks (including nested)
+        """
+        def count_recursive(bookmarks: list) -> int:
+            count = len(bookmarks)
+            for bookmark in bookmarks:
+                count += count_recursive(bookmark.get('children', []))
+            return count
+        
+        bookmarks = self.get_bookmarks()
+        return count_recursive(bookmarks)
+    
+    def find_bookmark_by_title(self, title: str) -> Optional[dict]:
+        """
+        Find a bookmark by its title.
+        
+        Args:
+            title: Bookmark title to search for
+            
+        Returns:
+            Bookmark dictionary if found, None otherwise
+        """
+        def search_recursive(bookmarks: list, target: str) -> Optional[dict]:
+            for bookmark in bookmarks:
+                if bookmark['title'] == target:
+                    return bookmark
+                result = search_recursive(bookmark.get('children', []), target)
+                if result:
+                    return result
+            return None
+        
+        bookmarks = self.get_bookmarks()
+        return search_recursive(bookmarks, title)
     
     # Dirty state management for annotations
     def is_modified(self) -> bool:

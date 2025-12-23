@@ -155,8 +155,12 @@ class MainWindow(QMainWindow):
         self.pdf_document.document_modified.connect(self._on_document_modified)
         self.pdf_document.undo_redo_changed.connect(self._on_undo_redo_changed)
         
+        # Left sidebar signals
+        self.left_sidebar.page_selected.connect(self.content_area.go_to_page)
+        
         # Content area signals
         self.content_area.page_changed.connect(self._on_page_changed)
+        self.content_area.page_changed.connect(self.left_sidebar.set_current_page)
         self.content_area.text_copied.connect(self._on_text_copied)
         self.content_area.text_selected.connect(self._on_text_selected)
         self.content_area.image_selected.connect(self._on_image_selected)
@@ -475,6 +479,9 @@ class MainWindow(QMainWindow):
         
         # Update status bar with page info
         self.status_bar_widget.set_page_info(1, self.pdf_document.page_count)
+        
+        # Load page thumbnails in sidebar
+        self.left_sidebar.load_pages(self.pdf_document.page_count, self.pdf_document)
     
     def _on_document_closed(self):
         """Handle PDF document closing."""

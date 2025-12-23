@@ -75,12 +75,16 @@ class LeftSidebar(QDockWidget):
         self.setMinimumWidth(WindowDefaults.LEFT_SIDEBAR_WIDTH)
     
     def _create_pages_tab(self):
-        """Create pages panel with thumbnails."""
+        """Create professional pages panel with thumbnail grid."""
+        from .page_grid_view import PageGridView
+        from .thumbnail_generator import ThumbnailGenerator
+        
         pages_widget = QWidget()
         layout = QVBoxLayout(pages_widget)
         layout.setSpacing(Spacing.SMALL)
+        layout.setContentsMargins(4, 4, 4, 4)
         
-        # Header
+        # Header with page counter and view mode dropdown
         header_layout = QHBoxLayout()
         title = QLabel("Pages")
         title_font = QFont()
@@ -93,21 +97,39 @@ class LeftSidebar(QDockWidget):
         self.page_counter = QLabel("0 pages")
         self.page_counter.setProperty("secondary", True)
         header_layout.addWidget(self.page_counter)
+        
+        # View mode dropdown
+        self.view_mode_combo = QComboBox()
+        self.view_mode_combo.addItems(["Small", "Medium", "Large"])
+        self.view_mode_combo.setCurrentIndex(1)  # Default: Medium
+        self.view_mode_combo.currentIndexChanged.connect(self._on_view_mode_changed)
+        self.view_mode_combo.setMaximumWidth(100)
+        header_layout.addWidget(self.view_mode_combo)
+        
         layout.addLayout(header_layout)
         
-        # Thumbnail grid (placeholder)
-        self.pages_list = QListWidget()
-        self.pages_list.setViewMode(QListWidget.IconMode)
-        self.pages_list.setIconSize(self.pages_list.iconSize() * 3)
-        self.pages_list.setSpacing(Spacing.SMALL)
-        self.pages_list.setResizeMode(QListWidget.Adjust)
-        layout.addWidget(self.pages_list)
+        # Create page grid view
+        self.pages_grid = PageGridView()
+        self.pages_grid.page_clicked.connect(self._on_page_clicked)
+        self.pages_grid.page_double_clicked.connect(self._on_page_double_clicked)
+        self.pages_grid.context_menu_requested.connect(self._on_page_context_menu)
+        layout.addWidget(self.pages_grid)
         
-        # Placeholder message
-        placeholder = QLabel(f"{Icons.PAGES}\n\nPage Thumbnails\n\n(Generated when PDF is opened)")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setProperty("secondary", True)
-        layout.addWidget(placeholder)
+        # Placeholder message (shown when no document open)
+        self.pages_placeholder = QLabel(
+            f"{Icons.PAGES}\n\nPage Thumbnails\n\n"
+            "(Generated when PDF is opened)"
+        )
+        self.pages_placeholder.setAlignment(Qt.AlignCenter)
+        self.pages_placeholder.setProperty("secondary", True)
+        layout.addWidget(self.pages_placeholder)
+        
+        # Initially hide grid, show placeholder
+        self.pages_grid.hide()
+        self.pages_placeholder.show()
+        
+        # Thumbnail generator (will be set when document loads)
+        self.thumbnail_generator = None
         
         self.tabs.addTab(pages_widget, Icons.PAGES)
         self.tabs.setTabToolTip(0, "Pages")
@@ -366,15 +388,123 @@ class LeftSidebar(QDockWidget):
             f"{feature} will be available in Phase 2."
         )
     
-    def load_pages(self, page_count: int):
+    def _on_view_mode_changed(self, index: int):
+        """Handle view mode dropdown change."""
+        # Map index to thumbnails per row and size
+        view_modes = {
+            0: (3, 100),   # Small: 3 per row, 100px
+            1: (2, 150),   # Medium: 2 per row, 150px
+            2: (1, 200),   # Large: 1 per row, 200px
+        }
+        
+        if index in view_modes:
+            thumbs_per_row, thumb_size = view_modes[index]
+            self.pages_grid.set_view_mode(thumbs_per_row, thumb_size)
+            
+            # Regenerate ALL thumbnails at new size if document is open
+            if self.thumbnail_generator:
+                # Get all pages instead of just visible ones
+                all_pages = list(range(self.pages_grid._page_count))
+                self.thumbnail_generator.generate_thumbnails(all_pages, thumb_size)
+    
+    def _on_page_clicked(self, page_num: int):
+        """Handle page thumbnail click - emit signal for navigation."""
+        self.page_selected.emit(page_num)
+    
+    def _on_page_double_clicked(self, page_num: int):
+        """Handle page thumbnail double-click."""
+        self.page_selected.emit(page_num)
+    
+    def _on_page_context_menu(self, page_num: int, pos):
+        """Handle page thumbnail context menu request."""
+        from PySide6.QtWidgets import QMenu
+        
+        menu = QMenu(self)
+        
+        # Add menu actions
+        go_action = menu.addAction(f"{Icons.PAGES} Go to Page {page_num + 1}")
+        go_action.triggered.connect(lambda: self.page_selected.emit(page_num))
+        
+        menu.addSeparator()
+        
+        # Phase 2 features (placeholders)
+        insert_before = menu.addAction("Insert Page Before [Phase 2]")
+        insert_before.triggered.connect(lambda: self._show_coming_soon("Insert Page Before"))
+        
+        insert_after = menu.addAction("Insert Page After [Phase 2]")
+        insert_after.triggered.connect(lambda: self._show_coming_soon("Insert Page After"))
+        
+        menu.addSeparator()
+        
+        delete_action = menu.addAction("Delete Page [Phase 2]")
+        delete_action.triggered.connect(lambda: self._show_coming_soon("Delete Page"))
+        
+        rotate_action = menu.addAction("Rotate Page 90° [Phase 2]")
+        rotate_action.triggered.connect(lambda: self._show_coming_soon("Rotate Page"))
+        
+        menu.addSeparator()
+        
+        extract_action = menu.addAction("Extract Page [Phase 2]")
+        extract_action.triggered.connect(lambda: self._show_coming_soon("Extract Page"))
+        
+        duplicate_action = menu.addAction("Duplicate Page [Phase 2]")
+        duplicate_action.triggered.connect(lambda: self._show_coming_soon("Duplicate Page"))
+        
+        menu.exec(pos)
+    
+    def load_pages(self, page_count: int, pdf_document):
         """
-        Load page thumbnails.
+        Load page thumbnails for document.
         
         Args:
             page_count: Number of pages in document
+            pdf_document: PDFDocument instance for thumbnail generation
         """
+        from .thumbnail_generator import ThumbnailGenerator
+        
+        # Update counter
         self.page_counter.setText(f"{page_count} pages")
-        # TODO Phase 2: Generate and display thumbnails
+        
+        # Show grid, hide placeholder
+        self.pages_placeholder.hide()
+        self.pages_grid.show()
+        
+        # Set page count in grid
+        self.pages_grid.set_page_count(page_count)
+        
+        # Create thumbnail generator
+        if self.thumbnail_generator:
+            self.thumbnail_generator.cancel()
+            self.thumbnail_generator.deleteLater()
+        
+        self.thumbnail_generator = ThumbnailGenerator(pdf_document, self)
+        self.thumbnail_generator.thumbnail_ready.connect(self._on_thumbnail_ready)
+        self.thumbnail_generator.progress_updated.connect(self._on_generation_progress)
+        
+        # Start generating thumbnails for visible pages
+        pages_to_load = self.pages_grid.get_pages_to_load()
+        current_mode = self.view_mode_combo.currentIndex()
+        view_modes = {0: 100, 1: 150, 2: 200}
+        thumb_size = view_modes.get(current_mode, 150)
+        
+        self.thumbnail_generator.generate_thumbnails(pages_to_load, thumb_size)
+    
+    def _on_thumbnail_ready(self, page_num: int, pixmap):
+        """Handle thumbnail generation complete."""
+        self.pages_grid.set_thumbnail(page_num, pixmap)
+    
+    def _on_generation_progress(self, current: int, total: int):
+        """Handle thumbnail generation progress."""
+        # Could show progress indicator here (Step 12)
+        pass
+    
+    def set_current_page(self, page_num: int):
+        """Update current page indicator in grid."""
+        self.pages_grid.set_current_page(page_num)
+    
+    def update_page_annotations(self, page_num: int, has_annotations: bool):
+        """Update annotation indicator for a page."""
+        self.pages_grid.set_page_has_annotations(page_num, has_annotations)
     
     def load_bookmarks(self, bookmarks: list):
         """
@@ -387,8 +517,18 @@ class LeftSidebar(QDockWidget):
         # TODO Phase 2: Populate bookmark tree
     
     def clear(self):
-        """Clear all content."""
-        self.pages_list.clear()
+        """Clear all content when document is closed."""
+        # Clear pages grid
+        self.pages_grid.clear()
+        self.pages_grid.hide()
+        self.pages_placeholder.show()
+        
+        # Cancel thumbnail generation
+        if self.thumbnail_generator:
+            self.thumbnail_generator.cancel()
+            self.thumbnail_generator = None
+        
+        # Clear other tabs
         self.bookmarks_tree.clear()
         self.comments_list.clear()
         self.layers_list.clear()
