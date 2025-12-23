@@ -602,33 +602,10 @@ class ContentArea(QGraphicsView):
         Args:
             event: Key event
         """
-        # Check for undo/redo shortcuts first (Cmd+Z, Cmd+Shift+Z, Cmd+Y)
-        modifiers = event.modifiers()
-        key = event.key()
+        # Note: Undo/Redo/Save shortcuts (Cmd+Z, Cmd+Shift+Z, Cmd+S) are handled
+        # through the menu bar, which works natively on macOS
         
-        # Cmd/Ctrl modifier detection
-        is_command_ctrl = modifiers & (Qt.ControlModifier | Qt.MetaModifier)
-        
-        # Pass undo/redo/save shortcuts to parent MainWindow
-        if is_command_ctrl:
-            if key == Qt.Key_Z and not (modifiers & Qt.ShiftModifier):
-                # Cmd+Z / Ctrl+Z: Undo - let parent handle it
-                event.ignore()  # Pass to parent
-                return
-            elif key == Qt.Key_Z and (modifiers & Qt.ShiftModifier):
-                # Cmd+Shift+Z: Redo - let parent handle it
-                event.ignore()  # Pass to parent
-                return
-            elif key == Qt.Key_Y:
-                # Cmd+Y / Ctrl+Y: Redo - let parent handle it
-                event.ignore()  # Pass to parent
-                return
-            elif key == Qt.Key_S:
-                # Cmd+S / Ctrl+S: Save - let parent handle it
-                event.ignore()  # Pass to parent
-                return
-        
-        # Handle our own keys
+        # Handle ContentArea-specific keys
         if event.key() == Qt.Key_Escape:
             # ESC: Cancel annotation mode or clear selection
             if self._annotation_mode:
@@ -639,18 +616,22 @@ class ContentArea(QGraphicsView):
                 # Just clear selection
                 self.clear_selection()
             event.accept()
+            return
         elif event.key() == Qt.Key_Space and not event.isAutoRepeat():
             # Spacebar pressed: Temporarily enable pan mode
             if not self._spacebar_pressed:
                 self._spacebar_pressed = True
                 self._update_cursor_and_drag_mode()
             event.accept()
-        elif event.key() == Qt.Key_C and is_command_ctrl:
+            return
+        elif event.key() == Qt.Key_C and (event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier)):
             # Ctrl+C / Cmd+C: Copy selected text
             self.copy_selected_text()
             event.accept()
-        else:
-            super().keyPressEvent(event)
+            return
+        
+        # Let all other keys pass through to parent
+        super().keyPressEvent(event)
     
     def keyReleaseEvent(self, event):
         """

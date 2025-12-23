@@ -65,21 +65,10 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(WindowDefaults.MIN_WIDTH, WindowDefaults.MIN_HEIGHT)
         
         # Add keyboard shortcuts for undo/redo
-        undo_shortcut = QAction(self)
-        undo_shortcut.setShortcut(QKeySequence.Undo)  # Cmd+Z on Mac, Ctrl+Z on Windows/Linux
-        undo_shortcut.triggered.connect(self._handle_undo)
-        self.addAction(undo_shortcut)
-        
-        redo_shortcut = QAction(self)
-        redo_shortcut.setShortcut(QKeySequence.Redo)  # Cmd+Shift+Z on Mac, Ctrl+Y on Windows/Linux
-        redo_shortcut.triggered.connect(self._handle_redo)
-        self.addAction(redo_shortcut)
-        
-        # Add keyboard shortcut for save
-        save_shortcut = QAction(self)
-        save_shortcut.setShortcut(QKeySequence.Save)  # Cmd+S on Mac, Ctrl+S on Windows/Linux
-        save_shortcut.triggered.connect(self._handle_save_file)
-        self.addAction(save_shortcut)
+        # Note: QKeySequence standard keys automatically use Cmd on Mac, Ctrl on Windows/Linux
+        # Note: Keyboard shortcuts are primarily handled through the menu bar
+        # Menu bar shortcuts work natively on macOS and are properly connected
+        # to the handler methods in _setup_connections()
     
     def _create_components(self):
         """Create all UI components."""
@@ -130,6 +119,9 @@ class MainWindow(QMainWindow):
         # Menu bar actions
         self.menu_bar_widget.open_file_requested.connect(self._handle_open_file)
         self.menu_bar_widget.close_file_requested.connect(self._handle_close_file)
+        self.menu_bar_widget.save_file_requested.connect(self._handle_save_file)  # Connect Save from menu
+        self.menu_bar_widget.undo_requested.connect(self._handle_undo)  # Connect Undo from menu  
+        self.menu_bar_widget.redo_requested.connect(self._handle_redo)  # Connect Redo from menu
         self.menu_bar_widget.copy_requested.connect(self.content_area.copy_selected_text)
         self.menu_bar_widget.exit_requested.connect(self.close)
         self.menu_bar_widget.zoom_in_requested.connect(self._handle_zoom_in)
