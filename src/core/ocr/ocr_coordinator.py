@@ -252,6 +252,10 @@ class ExportHandler:
 class OCRWorker(QThread):
     """Background worker thread for OCR processing."""
     
+    # Class-level singleton for OCR engine (shared across all workers)
+    _shared_engine = None
+    _shared_language = None
+    
     # Signals
     progress_updated = Signal(int, int, str)  # current, total, message
     page_completed = Signal(int, dict)  # page_num, statistics
@@ -281,6 +285,42 @@ class OCRWorker(QThread):
         self.apply_preprocessing = apply_preprocessing
         self._cancelled = False
     
+    @classmethod
+    def get_shared_engine(cls, language: str):
+        """
+        Get or create shared OCR engine.
+        
+        Reuses engine if language matches, creates new one if language changed.
+        This dramatically improves performance by avoiding repeated initialization.
+        
+        Args:
+            language: OCR language code
+            
+        Returns:
+            OCREngine instance
+        """
+        if cls._shared_engine is None or cls._shared_language != language:
+            print(f"DEBUG: Creating new shared OCR engine for language: {language}")
+            cls._shared_engine = OCREngine(language)
+            cls._shared_language = language
+        else:
+            print(f"DEBUG: Reusing existing OCR engine for language: {language}")
+        
+        return cls._shared_engine
+    
+    @classmethod
+    def cleanup_shared_engine(cls):
+        """Release shared OCR engine to free memory."""
+        if cls._shared_engine:
+            print("DEBUG: Cleaning up shared OCR engine")
+            del cls._shared_engine
+            cls._shared_engine = None
+            cls._shared_language = None
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+    
     def run(self):
         """Execute OCR processing in background thread."""
         try:
@@ -289,7 +329,8 @@ class OCRWorker(QThread):
             print(f"DEBUG OCRWorker: Starting OCR on {self.pdf_path}")
             print(f"DEBUG: Language: {self.language}")
             
-            ocr_engine = OCREngine(self.language)
+            # Use shared OCR engine (singleton pattern for performance)
+            ocr_engine = self.get_shared_engine(self.language)
             image_processor = ImageProcessor()
             text_extractor = TextExtractor(ocr_engine, image_processor)
             

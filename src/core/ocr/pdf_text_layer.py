@@ -183,7 +183,8 @@ class PDFSaveWorker(QThread):
     
     def run(self):
         """Execute PDF save operation in background thread."""
-        doc = None
+        source_doc = None
+        output_doc = None
         try:
             print("DEBUG PDFSaveWorker: Starting save operation")
             print(f"DEBUG: Input: {self.input_path}")
@@ -192,9 +193,9 @@ class PDFSaveWorker(QThread):
             
             self.progress_updated.emit(0, 100, "Opening PDF...")
             
-            # Open input PDF
-            doc = fitz.open(self.input_path)
-            print(f"DEBUG: Opened PDF successfully - {len(doc)} pages")
+            # Open source PDF
+            source_doc = fitz.open(self.input_path)
+            print(f"DEBUG: Opened source PDF - {len(source_doc)} pages")
             
             total_pages = len(self.ocr_results)
             if total_pages == 0:
@@ -207,20 +208,36 @@ class PDFSaveWorker(QThread):
             if total_blocks == 0:
                 raise ValueError("OCR results contain no text blocks")
             
+            # Create NEW output PDF with only OCR'd pages
+            output_doc = fitz.open()
+            print(f"DEBUG: Created new output PDF")
+            
+            # Get list of page numbers to extract
+            page_numbers = sorted(set(r.page_number for r in self.ocr_results))
+            print(f"DEBUG: Extracting pages: {page_numbers}")
+            
+            # Copy only the OCR'd pages from source to output
+            self.progress_updated.emit(10, 100, "Extracting pages...")
+            output_doc.insert_pdf(source_doc, from_page=min(page_numbers), to_page=max(page_numbers))
+            print(f"DEBUG: Copied {len(output_doc)} pages to output PDF")
+            
             # Create text layer manager
             text_layer = PDFTextLayer()
             
-            # Add text layer to each page
+            # Add text layer to each page in the NEW document
+            # Map original page numbers to new document indices
             pages_with_text = 0
             for i, ocr_result in enumerate(self.ocr_results):
                 if self._cancelled:
                     print("DEBUG: Save cancelled by user")
-                    if doc:
-                        doc.close()
+                    if source_doc:
+                        source_doc.close()
+                    if output_doc:
+                        output_doc.close()
                     return
                 
                 # Update progress
-                progress = int((i / total_pages) * 90)  # 0-90% for page processing
+                progress = 10 + int((i / total_pages) * 80)  # 10-90% for page processing
                 self.progress_updated.emit(
                     i + 1,
                     total_pages,
@@ -228,53 +245,49 @@ class PDFSaveWorker(QThread):
                 )
                 
                 # Debug: Show what we're processing
-                print(f"DEBUG: Page {i} has {len(ocr_result.text_blocks)} text blocks")
+                print(f"DEBUG: OCR result {i} - page {ocr_result.page_number} has {len(ocr_result.text_blocks)} text blocks")
                 
                 if len(ocr_result.text_blocks) > 0:
-                    page = doc[ocr_result.page_number]
-                    success = text_layer.add_text_layer_to_page(page, ocr_result)
-                    if success:
-                        pages_with_text += 1
-                    print(f"DEBUG: Added text layer to page {i}: {success}")
+                    # Map to new document index (pages are sequential starting from 0)
+                    new_page_index = i
+                    if new_page_index < len(output_doc):
+                        page = output_doc[new_page_index]
+                        success = text_layer.add_text_layer_to_page(page, ocr_result)
+                        if success:
+                            pages_with_text += 1
+                        print(f"DEBUG: Added text layer to output page {new_page_index}: {success}")
             
             print(f"DEBUG: Added text layers to {pages_with_text}/{total_pages} pages")
             
             if self._cancelled:
-                if doc:
-                    doc.close()
+                if source_doc:
+                    source_doc.close()
+                if output_doc:
+                    output_doc.close()
                 return
             
-            # Save with compression
-            self.progress_updated.emit(95, 100, "Saving PDF...")
-            print(f"DEBUG: Saving to {self.output_path}")
+            # Close source document (no longer needed)
+            source_doc.close()
+            source_doc = None
             
-            # Use incremental save for large PDFs to avoid memory issues
-            # For PDFs with 100+ pages, use less aggressive compression
-            if len(doc) > 100:
-                print(f"DEBUG: Large PDF ({len(doc)} pages), using moderate compression")
-                if self.compress:
-                    doc.save(
-                        self.output_path,
-                        garbage=2,  # Moderate compression for large files
-                        deflate=True,
-                        incremental=False
-                    )
-                else:
-                    doc.save(self.output_path, incremental=False)
+            # Save output document with compression
+            self.progress_updated.emit(95, 100, "Saving PDF...")
+            print(f"DEBUG: Saving output document to {self.output_path}")
+            print(f"DEBUG: Output document has {len(output_doc)} pages")
+            
+            # Always use maximum compression for output (it's a new small PDF)
+            if self.compress:
+                output_doc.save(
+                    self.output_path,
+                    garbage=4,  # Maximum compression
+                    deflate=True,
+                    clean=True
+                )
             else:
-                # Small PDFs can use maximum compression
-                if self.compress:
-                    doc.save(
-                        self.output_path,
-                        garbage=4,  # Maximum compression
-                        deflate=True,
-                        clean=True
-                    )
-                else:
-                    doc.save(self.output_path)
+                output_doc.save(self.output_path)
             
             print("DEBUG: PDF saved successfully")
-            doc.close()
+            output_doc.close()
             
             # Verify file was created and has content
             from pathlib import Path
@@ -297,9 +310,16 @@ class PDFSaveWorker(QThread):
             import traceback
             traceback.print_exc()
             
-            if doc:
+            # Clean up both documents
+            if source_doc:
                 try:
-                    doc.close()
+                    source_doc.close()
+                except:
+                    pass
+            
+            if output_doc:
+                try:
+                    output_doc.close()
                 except:
                     pass
             
