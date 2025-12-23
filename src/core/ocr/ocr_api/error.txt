@@ -1,0 +1,250 @@
+PS C:\Users\arjun\OneDrive\Desktop\Test\simple-pdf-handler\src\core\ocr\ocr_api> python .\test_ocr.py bengali.pdf bn
+
+======================================================================
+OCR TEST SCRIPT
+======================================================================
+PDF File: bengali.pdf
+Language: bn
+======================================================================
+
+Step 1: Extracting first page from PDF...
+✓ Extracted page 1 as 1422x2306 image
+
+Step 2: Initializing EasyOCR for language 'bn'...
+Using CPU. Note: This module is much faster with a GPU.
+✓ EasyOCR initialized in 2.3 seconds
+
+Step 3: Running OCR on extracted image...
+C:\Python310\lib\site-packages\torch\utils\data\dataloader.py:668: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+✓ OCR completed in 24.0 seconds
+✓ Found 42 text blocks
+
+======================================================================
+OCR RESULTS
+======================================================================
+
+[Block 1]
+  Text: বৌভূহলী
+  Confidence: 88.25%
+  Bounding Box: [np.int32(353), np.int32(105)] → [np.int32(650), np.int32(230)]
+
+[Block 2]
+  Text: কনের ফঁটী
+  Confidence: 45.00%
+  Bounding Box: [np.int32(283), np.int32(223)] → [np.int32(654), np.int32(334)]
+
+[Block 3]
+  Text: নারায়ণ সান্যাল
+  Confidence: 58.12%
+  Bounding Box: [np.int32(406), np.int32(344)] → [np.int32(641), np.int32(389)]
+
+[Block 4]
+  Text: কৌতূহলী কনের কাঁটা
+  Confidence: 70.84%
+  Bounding Box: [np.int32(702), np.int32(731)] → [np.int32(1228), np.int32(829)]
+
+[Block 5]
+  Text: রচনাকাল
+  Confidence: 96.77%
+  Bounding Box: [np.int32(705), np.int32(829)] → [np.int32(913), np.int32(889)]
+
+[Block 6]
+  Text: 1992
+  Confidence: 99.89%
+  Bounding Box: [np.int32(958), np.int32(832)] → [np.int32(1078), np.int32(886)]
+
+[Block 7]
+  Text: প্রথম প্রকাশ
+  Confidence: 62.72%
+  Bounding Box: [np.int32(705), np.int32(901)] → [np.int32(967), np.int32(961)]
+
+[Block 8]
+  Text: জুলাই, 1993
+  Confidence: 77.97%
+  Bounding Box: [np.int32(998), np.int32(892)] → [np.int32(1290), np.int32(970)]
+
+[Block 9]
+  Text: প্রচ্ছদশিল্পী
+  Confidence: 60.70%
+  Bounding Box: [np.int32(702), np.int32(962)] → [np.int32(933), np.int32(1038)]
+
+[Block 10]
+  Text: অঞ্জন দত্ত
+  Confidence: 95.44%
+  Bounding Box: [np.int32(971), np.int32(975)] → [np.int32(1187), np.int32(1037)]
+
+[Block 11]
+  Text: উৎসরগ
+  Confidence: 79.98%
+  Bounding Box: [np.int32(704), np.int32(1034)] → [np.int32(858), np.int32(1106)]
+
+[Block 12]
+  Text: শ্রীমতী অলকা ত্রিবেদী
+  Confidence: 54.69%
+  Bounding Box: [np.int32(889), np.int32(1031)] → [np.int32(1352), np.int32(1108)]
+
+[Block 13]
+  Text: অনন্তপ্রসাদ ত্রিবেদী
+  Confidence: 67.54%
+  Bounding Box: [np.int32(858), np.int32(1106)] → [np.int32(1254), np.int32(1180)]
+
+[Block 14]
+  Text: ইন্টারকমে ভেসে এল রানী দেবীর কণ্ঠস্বর, তোমার সঙ্গে একজন দেখা করতে চাইছে [
+  Confidence: 48.65%
+  Bounding Box: [np.int32(112), np.int32(1228)] → [np.int32(1277), np.int32(1283)]
+
+[Block 15]
+  Text: বাসু-সাহেব একটি এফিডেবিটের ড্রাফট সংশোধন করছিলেন | ইন্টারকমেই জানতে চান, 'চাইছে'
+  Confidence: 40.50%
+  Bounding Box: [np.int32(114), np.int32(1281)] → [np.int32(1375), np.int32(1337)]
+
+[Block 16]
+  Text: বললে যখন, তখন নিশ্চয় অল্পবয়সী
+  Confidence: 52.39%
+  Bounding Box: [np.int32(58), np.int32(1333)] → [np.int32(550), np.int32(1386)]
+
+[Block 17]
+  Text: ছেলে না মেয়ে?
+  Confidence: 75.59%
+  Bounding Box: [np.int32(567), np.int32(1343)] → [np.int32(795), np.int32(1385)]
+
+[Block 18]
+  Text: দ্বিতীয়টা
+  Confidence: 75.85%
+  Bounding Box: [np.int32(170), np.int32(1384)] → [np.int32(298), np.int32(1432)]
+
+[Block 19]
+  Text: বিবাহিতা না কুমারী?
+  Confidence: 62.29%
+  Bounding Box: [np.int32(167), np.int32(1432)] → [np.int32(471), np.int32(1495)]
+
+[Block 20]
+  Text: চাবিটা তো তোমার বাঁ-দিকের ড্রয়ারে আছে }
+  Confidence: 37.49%
+  Bounding Box: [np.int32(170), np.int32(1490)] → [np.int32(788), np.int32(1541)]
+
+[Block 21]
+  Text: চাবি
+  Confidence: 64.33%
+  Bounding Box: [np.int32(173), np.int32(1543)] → [np.int32(241), np.int32(1587)]
+
+[Block 22]
+  Text: কিসের চাবি?
+  Confidence: 98.24%
+  Bounding Box: [np.int32(258), np.int32(1540)] → [np.int32(452), np.int32(1590)]
+
+[Block 23]
+  Text: আচ্ছা, আসছি আমি
+  Confidence: 34.69%
+  Bounding Box: [np.int32(172), np.int32(1592)] → [np.int32(456), np.int32(1644)]
+
+[Block 24]
+  Text: একটু পরেই হইল-চেয়ারে পাক মেরে রানী এ ঘরে চলে আসেন
+  Confidence: 41.76%
+  Bounding Box: [np.int32(118), np.int32(1644)] → [np.int32(954), np.int32(1698)]
+
+[Block 25]
+  Text: মানে, ব্যারিস্টার পি কে বাসুর
+  Confidence: 52.00%
+  Bounding Box: [np.int32(970), np.int32(1646)] → [np.int32(1376), np.int32(1698)]
+
+[Block 26]
+  Text: খাশ কামরায়
+  Confidence: 44.02%
+  Bounding Box: [np.int32(61), np.int32(1703)] → [np.int32(241), np.int32(1745)]
+
+[Block 27]
+  Text: উনি ইনভ্যালিড-চেয়ারেই সারা বাড়ি ঘুরে বেড়ান
+  Confidence: 56.55%
+  Bounding Box: [np.int32(255), np.int32(1693)] → [np.int32(919), np.int32(1754)]
+
+[Block 28]
+  Text: কারণ তিনিই ব্যারিস্টার-সাহেবের
+  Confidence: 52.81%
+  Bounding Box: [np.int32(930), np.int32(1696)] → [np.int32(1380), np.int32(1748)]
+
+[Block 29]
+  Text: রিসেপশনিস্ট তথা জীবনসঙ্গিনী
+  Confidence: 46.20%
+  Bounding Box: [np.int32(58), np.int32(1745)] → [np.int32(492), np.int32(1799)]
+
+[Block 30]
+  Text: দরজা খুলে এ ঘরে এলেন / অটোমেটিক ডোর-ক্লোজারের অমোঘ আকর্ষণে একপাল্লার ফ্লাশ-
+  Confidence: 46.34%
+  Bounding Box: [np.int32(188), np.int32(1800)] → [np.int32(1380), np.int32(1854)]
+
+[Block 31]
+  Text: পাল্লা নিজে থেকেই বন্ধ হয়ে গেল
+  Confidence: 62.65%
+  Bounding Box: [np.int32(62), np.int32(1852)] → [np.int32(530), np.int32(1902)]
+
+[Block 32]
+  Text: বাসু জানতে চান, চাবির কথা কী বলছিলে? চাবি তো হারায়নি
+  Confidence: 65.20%
+  Bounding Box: [np.int32(544), np.int32(1849)] → [np.int32(1381), np.int32(1906)]
+
+[Block 33]
+  Text: রানী মুখে আঁচল চাপা দেন | হাসির দমক একটু কমলে বলেন, একে  ব্যারিস্টার,
+  Confidence: 28.55%
+  Bounding Box: [np.int32(120), np.int32(1954)] → [np.int32(1170), np.int32(2010)]
+
+[Block 34]
+  Text: তায় গোয়েন্দী
+  Confidence: 47.97%
+  Bounding Box: [np.int32(1175), np.int32(1963)] → [np.int32(1367), np.int32(2003)]
+
+[Block 35]
+  Text: চাবির রহস্যটা ধরতে পারলে না? সাক্ষাৎপ্রার্থিনী আমার সামনেই বসে আছে
+  Confidence: 42.60%
+  Bounding Box: [np.int32(62), np.int32(2005)] → [np.int32(1060), np.int32(2059)]
+
+[Block 36]
+  Text: তার নাকের ডগায় বসে
+  Confidence: 67.61%
+  Bounding Box: [np.int32(1071), np.int32(2017)] → [np.int32(1379), np.int32(2053)]
+
+[Block 37]
+  Text: কোন আক্কেলে বলি, শুধু বিবাহিতা নয়, সদ্য বিয়ের জল পাওয়া কনে! অষ্টমঙ্গলা পার হয়েছে কি
+  Confidence: 46.96%
+  Bounding Box: [np.int32(66), np.int32(2058)] → [np.int32(1382), np.int32(2110)]
+
+[Block 38]
+  Text: হয়নি
+  Confidence: 99.62%
+  Bounding Box: [np.int32(65), np.int32(2111)] → [np.int32(147), np.int32(2153)]
+
+[Block 39]
+  Text: বাসু-সাহেব পকেট থেকে পাইপ-পাউচ বার করতে করতে বলেন, কীভাবে এ সিদ্ধাস্তে এলে?
+  Confidence: 74.53%
+  Bounding Box: [np.int32(122), np.int32(2158)] → [np.int32(1382), np.int32(2212)]
+
+[Block 40]
+  Text: শ্রীযুক্ত
+  Confidence: 46.88%
+  Bounding Box: [np.float64(714.8836873886971), np.float64(1098.069499109577)] → [np.float64(845.1163126113029), np.float64(1195.930500890423)]
+
+[Block 41]
+  Text: রানী
+  Confidence: 83.96%
+  Bounding Box: [np.float64(117.54996302358565), np.float64(1801.2148779778327)] → [np.float64(191.45003697641437), np.float64(1843.7851220221673)]
+
+[Block 42]
+  Text: কিছু?
+  Confidence: 55.89%
+  Bounding Box: [np.float64(64.10557280900008), np.float64(1897.0806504495004)] → [np.float64(139.89442719099992), np.float64(1961.9193495504996)]
+
+======================================================================
+SUMMARY
+======================================================================
+Total text blocks: 42
+Total words: 189
+Average confidence: 62.14%
+
+--- FULL TEXT ---
+বৌভূহলী কনের ফঁটী নারায়ণ সান্যাল কৌতূহলী কনের কাঁটা রচনাকাল 1992 প্রথম প্রকাশ জুলাই, 1993 প্রচ্ছদশিল্পী অঞ্জন দত্ত উৎসরগ শ্রীমতী অলকা ত্র              রিবেদী অনন্তপ্রসাদ ত্রিবেদী ইন্টারকমে ভেসে এল রানী দেবীর কণ্ঠস্বর, তোমার সঙ্গে একজন দেখা করতে চাইছে [ বাসু-সাহেব একটি এফিডেবিটের ড্রাফট সং        ংশোধন করছিলেন | ইন্টারকমেই জানতে চান, 'চাইছে' বললে যখন, তখন নিশ্চয় অল্পবয়সী ছেলে না মেয়ে? দ্বিতীয়টা বিবাহিতা না কুমারী? চাবিটা তো তোমার বা    াঁ-দিকের ড্রয়ারে আছে } চাবি কিসের চাবি? আচ্ছা, আসছি আমি একটু পরেই হইল-চেয়ারে পাক মেরে রানী এ ঘরে চলে আসেন মানে, ব্যারিস্টার পি কে বাসুর খ       খাশ কামরায় উনি ইনভ্যালিড-চেয়ারেই সারা বাড়ি ঘুরে বেড়ান কারণ তিনিই ব্যারিস্টার-সাহেবের রিসেপশনিস্ট তথা জীবনসঙ্গিনী দরজা খুলে এ ঘরে এলেন / অট      টোমেটিক ডোর-ক্লোজারের অমোঘ আকর্ষণে একপাল্লার ফ্লাশ- পাল্লা নিজে থেকেই বন্ধ হয়ে গেল বাসু জানতে চান, চাবির কথা কী বলছিলে? চাবি তো হারায়নি র       রানী মুখে আঁচল চাপা দেন | হাসির দমক একটু কমলে বলেন, একে  ব্যারিস্টার, তায় গোয়েন্দী চাবির রহস্যটা ধরতে পারলে না? সাক্ষাৎপ্রার্থিনী আমার সা          ামনেই বসে আছে তার নাকের ডগায় বসে কোন আক্কেলে বলি, শুধু বিবাহিতা নয়, সদ্য বিয়ের জল পাওয়া কনে! অষ্টমঙ্গলা পার হয়েছে কি হয়নি বাসু-সাহেব প          পকেট থেকে পাইপ-পাউচ বার করতে করতে বলেন, কীভাবে এ সিদ্ধাস্তে এলে? শ্রীযুক্ত রানী কিছু?
+
+======================================================================
+✓ TEST COMPLETE
+======================================================================
+PS C:\Users\arjun\OneDrive\Desktop\Test\simple-pdf-handler\src\core\ocr\ocr_api> 
