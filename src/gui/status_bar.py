@@ -76,6 +76,32 @@ class StatusBar(QStatusBar):
         self.zoom_combo.setFixedWidth(100)
         self.zoom_combo.setToolTip("Select zoom level")
         
+        # Fix text visibility on macOS and Windows
+        self.zoom_combo.setStyleSheet("""
+            QComboBox {
+                color: palette(text);
+                background-color: palette(base);
+                border: 1px solid palette(mid);
+                border-radius: 3px;
+                padding: 2px 5px;
+                min-height: 20px;
+            }
+            QComboBox:hover {
+                border: 1px solid palette(highlight);
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid palette(text);
+                margin-right: 5px;
+            }
+        """)
+        
         # Right section: File info and status
         self.file_size_label = QLabel("")
         self.file_size_label.setMinimumWidth(80)

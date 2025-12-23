@@ -45,6 +45,8 @@ class LeftSidebar(QDockWidget):
     
     def _create_content(self):
         """Create sidebar content with tabs."""
+        from PySide6.QtWidgets import QScrollArea, QFrame
+        
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -60,7 +62,14 @@ class LeftSidebar(QDockWidget):
         self._create_search_tab()
         self._create_layers_tab()
         
-        layout.addWidget(self.tabs)
+        # Wrap tab widget in scroll area for small screens
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(self.tabs)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)  # Clean look, no border
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Only vertical scroll
+        
+        layout.addWidget(scroll_area)
         
         self.setWidget(container)
         self.setMinimumWidth(WindowDefaults.LEFT_SIDEBAR_WIDTH)
@@ -100,7 +109,8 @@ class LeftSidebar(QDockWidget):
         placeholder.setProperty("secondary", True)
         layout.addWidget(placeholder)
         
-        self.tabs.addTab(pages_widget, f"{Icons.PAGES} Pages")
+        self.tabs.addTab(pages_widget, Icons.PAGES)
+        self.tabs.setTabToolTip(0, "Pages")
     
     def _create_bookmarks_tab(self):
         """Create bookmarks panel with tree view."""
@@ -143,7 +153,8 @@ class LeftSidebar(QDockWidget):
         
         layout.addLayout(button_layout)
         
-        self.tabs.addTab(bookmarks_widget, f"{Icons.BOOKMARKS} Bookmarks")
+        self.tabs.addTab(bookmarks_widget, Icons.BOOKMARKS)
+        self.tabs.setTabToolTip(1, "Bookmarks")
     
     def _create_comments_tab(self):
         """Create comments panel."""
@@ -189,7 +200,8 @@ class LeftSidebar(QDockWidget):
         
         layout.addLayout(sort_layout)
         
-        self.tabs.addTab(comments_widget, f"{Icons.COMMENT} Comments")
+        self.tabs.addTab(comments_widget, Icons.COMMENT)
+        self.tabs.setTabToolTip(2, "Comments")
     
     def _create_search_tab(self):
         """Create search panel."""
@@ -255,7 +267,8 @@ class LeftSidebar(QDockWidget):
         self.results_count.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.results_count)
         
-        self.tabs.addTab(search_widget, f"{Icons.SEARCH} Search")
+        self.tabs.addTab(search_widget, Icons.SEARCH)
+        self.tabs.setTabToolTip(3, "Search")
     
     def _create_layers_tab(self):
         """Create layers panel for advanced PDFs."""
@@ -300,7 +313,8 @@ class LeftSidebar(QDockWidget):
         
         layout.addLayout(action_layout)
         
-        self.tabs.addTab(layers_widget, "📄 Layers")
+        self.tabs.addTab(layers_widget, "📄")
+        self.tabs.setTabToolTip(4, "Layers")
     
     def _perform_search(self):
         """Perform search with current settings."""

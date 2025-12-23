@@ -113,6 +113,15 @@ class ContentArea(QGraphicsView):
         if not self._pdf_document or not self._pdf_document.is_open:
             return
         
+        # Save current page to restore position after re-render
+        saved_page = self._current_page
+        
+        # Clear selection references BEFORE scene.clear() to avoid dangling references
+        self._selected_word_rects = []
+        self._selected_text = ""
+        self._selected_image_border = None
+        self._selected_image = None
+        
         # Clear existing content
         self.scene.clear()
         self._page_items = []
@@ -154,11 +163,15 @@ class ContentArea(QGraphicsView):
             total_height = y_offset - self._page_spacing
             self.scene.setSceneRect(0, 0, max_width, total_height)
             
-            # Scroll to top
-            self.verticalScrollBar().setValue(0)
-            
             # Render only visible pages
             self._render_visible_pages()
+            
+            # Restore to saved page (don't jump to page 1!)
+            if saved_page < len(self._page_positions):
+                self.go_to_page(saved_page)
+            else:
+                # Scroll to top only if this is first load
+                self.verticalScrollBar().setValue(0)
             
             # Update current page
             self._update_current_page()
@@ -598,7 +611,13 @@ class ContentArea(QGraphicsView):
         for page_num, page_y_offset in enumerate(self._page_positions):
             if page_num < len(self._page_items):
                 page_item = self._page_items[page_num]
-                page_height = page_item.pixmap().height()
+                
+                # Get page height (handle both pixmaps and placeholders)
+                if isinstance(page_item, QGraphicsPixmapItem):
+                    page_height = page_item.pixmap().height()
+                else:
+                    page_height = page_item.rect().height()
+                
                 page_bottom = page_y_offset + page_height
                 
                 # Check if selection intersects this page
@@ -656,18 +675,19 @@ class ContentArea(QGraphicsView):
     
     def clear_selection(self):
         """Clear the current text or image selection and highlights."""
-        # Remove text highlight rectangles
+        # Remove text highlight rectangles (check if still in scene)
         for rect_item in self._selected_word_rects:
-            self.scene.removeItem(rect_item)
+            if rect_item.scene() is not None:  # Only remove if still in scene
+                self.scene.removeItem(rect_item)
         
         self._selected_word_rects = []
         self._selected_text = ""
         self._selection_data = None
         
-        # Remove image border
-        if self._selected_image_border:
+        # Remove image border (check if still in scene)
+        if self._selected_image_border and self._selected_image_border.scene() is not None:
             self.scene.removeItem(self._selected_image_border)
-            self._selected_image_border = None
+        self._selected_image_border = None
         
         self._selected_image = None
     
@@ -706,7 +726,13 @@ class ContentArea(QGraphicsView):
         for page_num, page_y_offset in enumerate(self._page_positions):
             if page_num < len(self._page_items):
                 page_item = self._page_items[page_num]
-                page_height = page_item.pixmap().height()
+                
+                # Get page height (handle both pixmaps and placeholders)
+                if isinstance(page_item, QGraphicsPixmapItem):
+                    page_height = page_item.pixmap().height()
+                else:
+                    page_height = page_item.rect().height()
+                
                 page_bottom = page_y_offset + page_height
                 
                 # Check if click is on this page

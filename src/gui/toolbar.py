@@ -419,6 +419,7 @@ class Toolbar(QToolBar):
             btn.setToolTip(tooltip)
             btn.setAutoRaise(True)
             btn.setMinimumWidth(60)
+            btn.setFixedHeight(50)  # Fixed height to prevent shift on click
             btn.clicked.connect(callback)
             
             if is_doc_action:
