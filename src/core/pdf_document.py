@@ -693,6 +693,209 @@ class PDFDocument(QObject):
         bookmarks = self.get_bookmarks()
         return search_recursive(bookmarks, title)
     
+    # Search methods
+    def search_text(self, search_term: str, match_case: bool = False, 
+                   whole_words: bool = False, use_regex: bool = False) -> list:
+        """
+        Search for text across all pages in the PDF document.
+        
+        Args:
+            search_term: Text to search for
+            match_case: If True, perform case-sensitive search
+            whole_words: If True, match whole words only
+            use_regex: If True, treat search_term as regular expression
+            
+        Returns:
+            List of search results, each containing:
+            [
+                {
+                    'page': int,           # Page number (0-indexed)
+                    'text': str,           # Matched text
+                    'bbox': tuple,         # Bounding box (x0, y0, x1, y1)
+                    'context': str,        # Surrounding text for context
+                    'instance': int        # Instance number on page
+                },
+                ...
+            ]
+        """
+        if not self._doc or not search_term:
+            return []
+        
+        results = []
+        
+        try:
+            # Set PyMuPDF search flags
+            flags = 0
+            if not match_case:
+                flags |= fitz.TEXT_PRESERVE_WHITESPACE
+            
+            # Search each page
+            for page_num in range(self._page_count):
+                page = self._doc[page_num]
+                
+                # Perform search based on options
+                if use_regex:
+                    # For regex, we need to get all text and search manually
+                    page_text = page.get_text()
+                    if not match_case:
+                        import re
+                        pattern = re.compile(search_term, re.IGNORECASE)
+                        matches = list(pattern.finditer(page_text))
+                    else:
+                        import re
+                        pattern = re.compile(search_term)
+                        matches = list(pattern.finditer(page_text))
+                    
+                    # For regex matches, we need to find their positions
+                    for match_idx, match in enumerate(matches):
+                        matched_text = match.group()
+                        
+                        # Try to find this text on the page to get bbox
+                        text_instances = page.search_for(matched_text, quads=True)
+                        
+                        if text_instances:
+                            for inst_idx, quad in enumerate(text_instances):
+                                # Convert quad to bbox
+                                bbox = (quad.ul.x, quad.ul.y, quad.lr.x, quad.lr.y)
+                                
+                                # Get context
+                                context = self._get_search_context(page_text, match.start(), match.end())
+                                
+                                results.append({
+                                    'page': page_num,
+                                    'text': matched_text,
+                                    'bbox': bbox,
+                                    'context': context,
+                                    'instance': match_idx
+                                })
+                else:
+                    # Standard search
+                    search_flags = 0
+                    
+                    # PyMuPDF search_for options
+                    if not match_case:
+                        # Default is case-insensitive
+                        pass
+                    else:
+                        # For case-sensitive, we don't use any special flag
+                        # PyMuPDF search_for is case-sensitive by default
+                        pass
+                    
+                    # Get search term (adjust for whole words)
+                    search_query = search_term
+                    if whole_words:
+                        # Add word boundaries
+                        search_query = f" {search_term} "
+                    
+                    # Perform search
+                    text_instances = page.search_for(search_query, quads=True)
+                    
+                    # If whole words and no results, try with single boundary
+                    if whole_words and not text_instances:
+                        text_instances = page.search_for(f"{search_term} ", quads=True)
+                        if not text_instances:
+                            text_instances = page.search_for(f" {search_term}", quads=True)
+                    
+                    # Get page text for context
+                    page_text = page.get_text()
+                    
+                    # Process each match
+                    for inst_idx, quad in enumerate(text_instances):
+                        # Convert quad to bbox
+                        bbox = (quad.ul.x, quad.ul.y, quad.lr.x, quad.lr.y)
+                        
+                        # Extract matched text
+                        matched_text = page.get_textbox(bbox).strip()
+                        if not matched_text:
+                            matched_text = search_term
+                        
+                        # Get context
+                        context = self._get_search_context_from_bbox(page, bbox, page_text)
+                        
+                        results.append({
+                            'page': page_num,
+                            'text': matched_text,
+                            'bbox': bbox,
+                            'context': context,
+                            'instance': inst_idx
+                        })
+            
+            return results
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Search failed: {str(e)}")
+            return []
+    
+    def _get_search_context(self, text: str, start: int, end: int, 
+                          context_chars: int = 50) -> str:
+        """
+        Get context around a search match in text.
+        
+        Args:
+            text: Full text
+            start: Match start position
+            end: Match end position
+            context_chars: Number of characters before/after to include
+            
+        Returns:
+            Context string with match highlighted
+        """
+        # Get surrounding text
+        context_start = max(0, start - context_chars)
+        context_end = min(len(text), end + context_chars)
+        
+        before = text[context_start:start]
+        match = text[start:end]
+        after = text[end:context_end]
+        
+        # Add ellipsis if truncated
+        if context_start > 0:
+            before = "..." + before.lstrip()
+        if context_end < len(text):
+            after = after.rstrip() + "..."
+        
+        return f"{before}**{match}**{after}"
+    
+    def _get_search_context_from_bbox(self, page, bbox: tuple, 
+                                     page_text: str, context_chars: int = 50) -> str:
+        """
+        Get context around a search match using bounding box.
+        
+        Args:
+            page: PyMuPDF page object
+            bbox: Match bounding box (x0, y0, x1, y1)
+            page_text: Full page text
+            context_chars: Number of characters before/after to include
+            
+        Returns:
+            Context string with match highlighted
+        """
+        try:
+            # Get matched text
+            matched_text = page.get_textbox(bbox).strip()
+            
+            # Find match position in page text
+            if not match_case:
+                match_pos = page_text.lower().find(matched_text.lower())
+            else:
+                match_pos = page_text.find(matched_text)
+            
+            if match_pos == -1:
+                # Fallback: just return matched text
+                return f"...{matched_text}..."
+            
+            return self._get_search_context(
+                page_text, 
+                match_pos, 
+                match_pos + len(matched_text),
+                context_chars
+            )
+            
+        except:
+            # Fallback
+            matched_text = page.get_textbox(bbox).strip()
+            return f"...{matched_text}..."
+    
     # Dirty state management for annotations
     def is_modified(self) -> bool:
         """

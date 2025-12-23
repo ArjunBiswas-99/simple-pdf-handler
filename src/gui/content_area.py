@@ -83,6 +83,11 @@ class ContentArea(QGraphicsView):
         self._annotation_color = (1, 1, 0)  # Yellow default (RGB 0-1)
         self._annotation_color_rgb = (255, 255, 0)  # For Qt display (RGB 0-255)
         
+        # Search highlighting state
+        self._search_highlights = []  # List of QGraphicsRectItem for search matches
+        self._current_search_match = None  # Currently selected search match bbox
+        self._all_search_results = []  # All search results for highlighting
+        
         # Show placeholder
         self._show_placeholder()
     
@@ -950,3 +955,133 @@ class ContentArea(QGraphicsView):
             
             # Replace in list
             self._page_items[page_number] = rendered_item
+    
+    # Search highlighting methods
+    def highlight_search_results(self, results: list):
+        """
+        Highlight all search results on PDF pages.
+        
+        Args:
+            results: List of search result dictionaries with 'page' and 'bbox'
+        """
+        # Clear existing highlights
+        self.clear_search_highlights()
+        
+        # Store results
+        self._all_search_results = results
+        
+        if not results or not self._pdf_document:
+            return
+        
+        from PySide6.QtWidgets import QGraphicsRectItem
+        from PySide6.QtGui import QColor, QPen, QBrush
+        
+        zoom_factor = self._pdf_document.zoom_level / 100.0
+        
+        # Draw highlight for each result
+        for result in results:
+            page_num = result['page']
+            bbox = result['bbox']  # (x0, y0, x1, y1) in PDF coordinates
+            
+            if page_num < len(self._page_positions):
+                page_y_offset = self._page_positions[page_num]
+                
+                # Convert PDF bbox to scene coordinates
+                x0, y0, x1, y1 = bbox
+                scene_x0 = x0 * zoom_factor
+                scene_y0 = (y0 * zoom_factor) + page_y_offset
+                scene_x1 = x1 * zoom_factor
+                scene_y1 = (y1 * zoom_factor) + page_y_offset
+                
+                # Create highlight rectangle
+                highlight_rect = QRectF(scene_x0, scene_y0, scene_x1 - scene_x0, scene_y1 - scene_y0)
+                highlight_item = QGraphicsRectItem(highlight_rect)
+                
+                # Style: Yellow with 50% opacity for search highlights
+                yellow_color = QColor(255, 235, 59, 127)  # RGBA: Bright yellow with 50% alpha
+                highlight_item.setBrush(QBrush(yellow_color))
+                highlight_item.setPen(QPen(QColor(255, 235, 59, 200), 1))  # Yellow border
+                
+                # Add to scene and track
+                self.scene.addItem(highlight_item)
+                self._search_highlights.append(highlight_item)
+    
+    def highlight_current_search_match(self, page_num: int, bbox: tuple):
+        """
+        Highlight the currently selected search match with a different color.
+        
+        Args:
+            page_num: Page number (0-indexed)
+            bbox: Bounding box (x0, y0, x1, y1) in PDF coordinates
+        """
+        # Clear previous current match highlight
+        if self._current_search_match and self._current_search_match.scene():
+            self.scene.removeItem(self._current_search_match)
+            self._current_search_match = None
+        
+        if not self._pdf_document or page_num >= len(self._page_positions):
+            return
+        
+        from PySide6.QtWidgets import QGraphicsRectItem
+        from PySide6.QtGui import QColor, QPen, QBrush
+        
+        zoom_factor = self._pdf_document.zoom_level / 100.0
+        page_y_offset = self._page_positions[page_num]
+        
+        # Convert bbox to scene coordinates
+        x0, y0, x1, y1 = bbox
+        scene_x0 = x0 * zoom_factor
+        scene_y0 = (y0 * zoom_factor) + page_y_offset
+        scene_x1 = x1 * zoom_factor
+        scene_y1 = (y1 * zoom_factor) + page_y_offset
+        
+        # Create current match highlight (orange for emphasis)
+        highlight_rect = QRectF(scene_x0, scene_y0, scene_x1 - scene_x0, scene_y1 - scene_y0)
+        self._current_search_match = QGraphicsRectItem(highlight_rect)
+        
+        # Style: Orange with 60% opacity for current match
+        orange_color = QColor(255, 152, 0, 153)  # RGBA: Orange with 60% alpha
+        self._current_search_match.setBrush(QBrush(orange_color))
+        self._current_search_match.setPen(QPen(QColor(255, 152, 0), 2))  # Orange border, 2px
+        
+        # Add to scene
+        self.scene.addItem(self._current_search_match)
+        
+        # Scroll to make this match visible
+        self._scroll_to_rect(scene_x0, scene_y0, scene_x1 - scene_x0, scene_y1 - scene_y0)
+    
+    def _scroll_to_rect(self, x: float, y: float, width: float, height: float):
+        """
+        Scroll to ensure a rectangle is visible in the viewport.
+        
+        Args:
+            x: Rectangle x position in scene coordinates
+            y: Rectangle y position in scene coordinates
+            width: Rectangle width
+            height: Rectangle height
+        """
+        # Create rect in scene coordinates
+        target_rect = QRectF(x, y, width, height)
+        
+        # Add some padding
+        padding = 50
+        padded_rect = target_rect.adjusted(-padding, -padding, padding, padding)
+        
+        # Ensure rect is visible
+        self.ensureVisible(padded_rect, 50, 50)
+    
+    def clear_search_highlights(self):
+        """Clear all search highlights from the display."""
+        # Remove all search highlight rectangles
+        for highlight_item in self._search_highlights:
+            if highlight_item.scene():
+                self.scene.removeItem(highlight_item)
+        
+        self._search_highlights = []
+        
+        # Clear current match highlight
+        if self._current_search_match and self._current_search_match.scene():
+            self.scene.removeItem(self._current_search_match)
+            self._current_search_match = None
+        
+        self._all_search_results = []

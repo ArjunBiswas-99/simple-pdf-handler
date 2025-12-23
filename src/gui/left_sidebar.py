@@ -213,69 +213,15 @@ class LeftSidebar(QDockWidget):
     
     def _create_search_tab(self):
         """Create search panel."""
-        search_widget = QWidget()
-        layout = QVBoxLayout(search_widget)
-        layout.setSpacing(Spacing.SMALL)
+        from .search_panel import SearchPanel
         
-        # Header
-        title = QLabel("Search Document")
-        title_font = QFont()
-        title_font.setWeight(QFont.Weight.DemiBold)
-        title.setFont(title_font)
-        layout.addWidget(title)
+        # Create advanced search panel
+        self.search_panel = SearchPanel()
+        self.search_panel.search_requested.connect(self._on_search_requested)
+        self.search_panel.result_selected.connect(self._on_search_result_selected)
+        self.search_panel.clear_highlights.connect(self._on_clear_search_highlights)
         
-        # Search input
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Enter search text...")
-        self.search_input.returnPressed.connect(self._perform_search)
-        layout.addWidget(self.search_input)
-        
-        # Search options
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.setContentsMargins(0, 0, 0, 0)
-        options_layout.setSpacing(Spacing.SMALL)
-        
-        self.match_case_cb = QCheckBox("Match case")
-        options_layout.addWidget(self.match_case_cb)
-        
-        self.whole_words_cb = QCheckBox("Whole words only")
-        options_layout.addWidget(self.whole_words_cb)
-        
-        self.regex_cb = QCheckBox("Regular expression")
-        options_layout.addWidget(self.regex_cb)
-        
-        layout.addWidget(options_group)
-        
-        # Search buttons
-        button_layout = QHBoxLayout()
-        
-        search_btn = QPushButton(f"{Icons.SEARCH} Find All")
-        search_btn.clicked.connect(self._perform_search)
-        button_layout.addWidget(search_btn)
-        
-        clear_btn = QPushButton("Clear")
-        clear_btn.clicked.connect(self._clear_search)
-        button_layout.addWidget(clear_btn)
-        
-        layout.addLayout(button_layout)
-        
-        # Results section
-        results_label = QLabel("Results:")
-        results_label.setProperty("secondary", True)
-        layout.addWidget(results_label)
-        
-        self.results_list = QListWidget()
-        self.results_list.itemClicked.connect(self._on_result_selected)
-        layout.addWidget(self.results_list)
-        
-        # Results count
-        self.results_count = QLabel("0 matches")
-        self.results_count.setProperty("secondary", True)
-        self.results_count.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.results_count)
-        
-        self.tabs.addTab(search_widget, Icons.SEARCH)
+        self.tabs.addTab(self.search_panel, Icons.SEARCH)
         self.tabs.setTabToolTip(3, "Search")
     
     def _create_layers_tab(self):
@@ -324,41 +270,45 @@ class LeftSidebar(QDockWidget):
         self.tabs.addTab(layers_widget, "📄")
         self.tabs.setTabToolTip(4, "Layers")
     
-    def _perform_search(self):
-        """Perform search with current settings."""
-        search_text = self.search_input.text()
-        if not search_text:
-            return
+    def _on_search_requested(self, search_term: str, options: dict):
+        """
+        Handle search request from search panel.
         
-        options = {
-            'match_case': self.match_case_cb.isChecked(),
-            'whole_words': self.whole_words_cb.isChecked(),
-            'regex': self.regex_cb.isChecked()
-        }
-        
-        # Emit signal
-        self.search_requested.emit(search_text, options)
-        
-        # For Phase 1, show placeholder
-        self.results_list.clear()
-        self.results_list.addItem("Search will be functional in Phase 2")
-        self.results_count.setText("Phase 2 feature")
+        Args:
+            search_term: Text to search for
+            options: Search options dictionary
+        """
+        # Emit signal to main window for processing
+        self.search_requested.emit(search_term, options)
     
-    def _clear_search(self):
-        """Clear search results."""
-        self.search_input.clear()
-        self.results_list.clear()
-        self.results_count.setText("0 matches")
-    
-    def _on_result_selected(self, item):
+    def _on_search_result_selected(self, page_num: int, bbox: tuple):
         """
         Handle search result selection.
         
         Args:
-            item: Selected list item
+            page_num: Page number (0-indexed)
+            bbox: Bounding box of match
         """
-        # TODO Phase 2: Navigate to result
+        # Navigate to page (emit page_selected signal)
+        self.page_selected.emit(page_num)
+    
+    def _on_clear_search_highlights(self):
+        """Handle clear highlights request."""
+        # Signal will be handled by main window/content area
         pass
+    
+    def display_search_results(self, results: list):
+        """
+        Display search results in search panel.
+        
+        Args:
+            results: List of search result dictionaries
+        """
+        self.search_panel.display_results(results)
+    
+    def clear_search(self):
+        """Clear search results."""
+        self.search_panel.clear_results()
     
     def _show_coming_soon(self, feature: str):
         """
@@ -550,4 +500,4 @@ class LeftSidebar(QDockWidget):
         self.comments_list.clear()
         self.layers_list.clear()
         self.page_counter.setText("0 pages")
-        self._clear_search()
+        self.clear_search()

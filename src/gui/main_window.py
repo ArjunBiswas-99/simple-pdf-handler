@@ -157,6 +157,10 @@ class MainWindow(QMainWindow):
         
         # Left sidebar signals
         self.left_sidebar.page_selected.connect(self.content_area.go_to_page)
+        self.left_sidebar.search_requested.connect(self._handle_search_requested)
+        
+        # Search panel signals (connect after search_panel is created in left_sidebar)
+        # Note: We'll connect these in _on_document_loaded after sidebar is fully initialized
         
         # Content area signals
         self.content_area.page_changed.connect(self._on_page_changed)
@@ -394,6 +398,86 @@ class MainWindow(QMainWindow):
         """Handle rotate page request."""
         self.status_bar_widget.show_message("Rotate (Phase 2)", 2000)
     
+    def _handle_search_requested(self, search_term: str, options: dict):
+        """
+        Handle search request from sidebar.
+        
+        Args:
+            search_term: Text to search for
+            options: Search options dictionary
+        """
+        if not self.pdf_document or not self.pdf_document.is_open:
+            return
+        
+        # Cancel any existing search
+        if hasattr(self, '_search_worker') and self._search_worker and self._search_worker.isRunning():
+            self._search_worker.cancel()
+            self._search_worker.wait()
+        
+        # Show searching message
+        self.status_bar_widget.show_message(f"Searching for '{search_term}'...", 0)
+        
+        # Create and start search worker
+        from .search_worker import SearchWorker
+        
+        self._search_worker = SearchWorker(self.pdf_document, search_term, options)
+        self._search_worker.progress_updated.connect(self._on_search_progress)
+        self._search_worker.results_ready.connect(self._on_search_results)
+        self._search_worker.error_occurred.connect(self._on_search_error)
+        self._search_worker.start()
+    
+    def _on_search_progress(self, current_page: int, total_pages: int):
+        """
+        Handle search progress update.
+        
+        Args:
+            current_page: Current page being searched
+            total_pages: Total number of pages
+        """
+        # Update progress in sidebar
+        percentage = int((current_page / total_pages) * 100)
+        self.left_sidebar.search_panel.set_progress(percentage)
+        
+        # Update status bar
+        self.status_bar_widget.show_message(
+            f"Searching... {current_page}/{total_pages} pages",
+            0
+        )
+    
+    def _on_search_results(self, results: list):
+        """
+        Handle search results ready.
+        
+        Args:
+            results: List of search result dictionaries
+        """
+        # Display results in sidebar
+        self.left_sidebar.display_search_results(results)
+        
+        # Highlight all matches on PDF pages
+        self.content_area.highlight_search_results(results)
+        
+        # Update status message
+        if results:
+            unique_pages = len(set(r['page'] for r in results))
+            self.status_bar_widget.show_message(
+                f"Found {len(results)} match{'es' if len(results) != 1 else ''} "
+                f"on {unique_pages} page{'s' if unique_pages != 1 else ''}",
+                5000
+            )
+        else:
+            self.status_bar_widget.show_message("No matches found", 3000)
+    
+    def _on_search_error(self, error_message: str):
+        """
+        Handle search error.
+        
+        Args:
+            error_message: Error description
+        """
+        self.status_bar_widget.show_message(f"Search error: {error_message}", 5000)
+        QMessageBox.warning(self, "Search Error", error_message)
+    
     def _handle_highlight_mode(self, enabled: bool):
         """
         Handle highlight mode toggle from toolbar.
@@ -487,6 +571,26 @@ class MainWindow(QMainWindow):
         # Load bookmarks in sidebar
         bookmarks = self.pdf_document.get_bookmarks()
         self.left_sidebar.load_bookmarks(bookmarks)
+        
+        # Connect search result selection signal
+        self.left_sidebar.search_panel.result_selected.connect(self._on_search_result_clicked)
+        
+        # Connect clear highlights signal
+        self.left_sidebar.search_panel.clear_highlights.connect(self.content_area.clear_search_highlights)
+    
+    def _on_search_result_clicked(self, page_num: int, bbox: tuple):
+        """
+        Handle search result click - navigate and highlight.
+        
+        Args:
+            page_num: Page number (0-indexed)
+            bbox: Bounding box of match
+        """
+        # Navigate to page
+        self.content_area.go_to_page(page_num)
+        
+        # Highlight this specific match (orange)
+        self.content_area.highlight_current_search_match(page_num, bbox)
     
     def _on_document_closed(self):
         """Handle PDF document closing."""
