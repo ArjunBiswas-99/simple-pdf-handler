@@ -9,10 +9,12 @@ from PySide6.QtWidgets import (
     QPushButton, QListWidget, QListWidgetItem
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QPixmap, QPainter
+from PySide6.QtSvg import QSvgRenderer
 
 from utils.constants import AppInfo, Icons, Fonts, Spacing
 from utils.config import get_config
+from utils.icon_manager import get_icon
 
 
 class WelcomeScreen(QWidget):
@@ -79,11 +81,10 @@ class WelcomeScreen(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(Spacing.MEDIUM)
         
-        # App icon
-        icon_label = QLabel(Icons.PAGES)
-        icon_font = QFont()
-        icon_font.setPointSize(64)
-        icon_label.setFont(icon_font)
+        # App icon - Large SVG icon
+        icon_label = QLabel()
+        icon_pixmap = get_icon('file_text', 80).pixmap(80, 80)
+        icon_label.setPixmap(icon_pixmap)
         icon_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(icon_label)
         
@@ -124,25 +125,31 @@ class WelcomeScreen(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(Spacing.MEDIUM)
         
-        # Open File button
-        open_btn = QPushButton(f"{Icons.OPEN} Open File")
-        open_btn.setMinimumSize(120, 80)
+        # Open File button with SVG icon
+        open_btn = QPushButton("Open File")
+        open_btn.setIcon(get_icon('file_open', 32))
+        open_btn.setIconSize(open_btn.iconSize() * 2)
+        open_btn.setMinimumSize(140, 80)
         open_btn.setToolTip("Open a PDF file (Ctrl+O)")
         open_btn.clicked.connect(self.open_file_requested.emit)
         self._style_action_button(open_btn)
         layout.addWidget(open_btn)
         
-        # Recent Files button
-        recent_btn = QPushButton(f"{Icons.BOOKMARKS} Recent Files")
-        recent_btn.setMinimumSize(120, 80)
+        # Recent Files button with SVG icon
+        recent_btn = QPushButton("Recent Files")
+        recent_btn.setIcon(get_icon('bookmarks', 32))
+        recent_btn.setIconSize(recent_btn.iconSize() * 2)
+        recent_btn.setMinimumSize(140, 80)
         recent_btn.setToolTip("View recently opened files")
         recent_btn.clicked.connect(self._scroll_to_recent)
         self._style_action_button(recent_btn)
         layout.addWidget(recent_btn)
         
-        # Quick Tour button
-        tour_btn = QPushButton(f"{Icons.INFO} Quick Tour")
-        tour_btn.setMinimumSize(120, 80)
+        # Quick Tour button with SVG icon
+        tour_btn = QPushButton("Quick Tour")
+        tour_btn.setIcon(get_icon('info', 32))
+        tour_btn.setIconSize(tour_btn.iconSize() * 2)
+        tour_btn.setMinimumSize(140, 80)
         tour_btn.setToolTip("Learn about the application")
         tour_btn.clicked.connect(self.show_tour_requested.emit)
         self._style_action_button(tour_btn)
@@ -208,8 +215,9 @@ class WelcomeScreen(QWidget):
             # Extract filename from path
             filename = file_path.split('/')[-1]
             
-            # Create list item
-            item = QListWidgetItem(f"{Icons.PAGES} {filename}")
+            # Create list item with SVG icon
+            item = QListWidgetItem(filename)
+            item.setIcon(get_icon('pages', 16))
             item.setToolTip(file_path)
             item.setData(Qt.UserRole, file_path)
             self.recent_list.addItem(item)

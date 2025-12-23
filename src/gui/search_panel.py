@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QColor
 
 from utils.constants import Icons, Spacing
+from utils.icon_manager import get_icon
 
 
 class SearchResultItem(QWidget):
@@ -221,7 +222,8 @@ class SearchPanel(QWidget):
         # Search buttons
         button_layout = QHBoxLayout()
         
-        self.search_btn = QPushButton(f"{Icons.SEARCH} Find All")
+        self.search_btn = QPushButton("Find All")
+        self.search_btn.setIcon(get_icon('search', 16))
         self.search_btn.clicked.connect(self._on_search_clicked)
         self.search_btn.setStyleSheet("""
             QPushButton {

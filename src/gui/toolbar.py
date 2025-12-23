@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from utils.constants import Icons, Spacing, Fonts
+from utils.icon_manager import get_icon
 
 
 class Toolbar(QToolBar):
@@ -121,7 +122,7 @@ class Toolbar(QToolBar):
         self.tab_buttons = QButtonGroup(self)
         self.tab_buttons.setExclusive(True)
         
-        # Create buttons for each tab
+        # Create buttons for each tab with professional styling
         tabs = ["Home", "Edit", "Annotate", "Page", "Convert"]
         for tab in tabs:
             btn = QToolButton()
@@ -129,8 +130,31 @@ class Toolbar(QToolBar):
             btn.setCheckable(True)
             btn.setAutoRaise(False)
             btn.setMinimumWidth(80)
-            btn.setMinimumHeight(28)
+            btn.setMinimumHeight(32)
             btn.clicked.connect(lambda checked, t=tab: self._switch_tab(t))
+            
+            # Apply professional tab button styling
+            btn.setStyleSheet("""
+                QToolButton {
+                    background-color: #f0f0f0;
+                    border: 1px solid #d0d0d0;
+                    border-bottom: 3px solid #d0d0d0;
+                    border-radius: 4px 4px 0px 0px;
+                    padding: 6px 16px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #606060;
+                }
+                QToolButton:checked {
+                    background-color: #ffffff;
+                    border-bottom: 3px solid #0078d4;
+                    color: #0078d4;
+                }
+                QToolButton:hover {
+                    background-color: #e8e8e8;
+                    color: #0078d4;
+                }
+            """)
             
             if tab == "Home":
                 btn.setChecked(True)
@@ -166,9 +190,9 @@ class Toolbar(QToolBar):
         
         # File group
         file_group = self._create_tool_group("File", [
-            (f"{Icons.OPEN}\nOpen", "Open PDF file (Ctrl+O)", self.open_file_requested.emit, False),
-            (f"{Icons.SAVE}\nSave", "Save document (Ctrl+S)", self.save_file_requested.emit, True),
-            (f"{Icons.PRINT}\nPrint", "Print document (Ctrl+P)", self.print_requested.emit, True),
+            ("Open", "Open PDF file (Ctrl+O)", self.open_file_requested.emit, False),
+            ("Save", "Save document (Ctrl+S)", self.save_file_requested.emit, True),
+            ("Print", "Print document (Ctrl+P)", self.print_requested.emit, True),
         ])
         layout.addWidget(file_group)
         
@@ -176,9 +200,9 @@ class Toolbar(QToolBar):
         
         # View group
         view_group = self._create_tool_group("View", [
-            (f"{Icons.ZOOM_IN}\nZoom In", "Zoom in (Ctrl++)", self.zoom_in_requested.emit, True),
-            (f"{Icons.ZOOM_OUT}\nZoom Out", "Zoom out (Ctrl+-)", self.zoom_out_requested.emit, True),
-            (f"{Icons.FIT_PAGE}\nFit Page", "Fit page to window (Ctrl+0)", lambda: None, True),
+            ("Zoom In", "Zoom in (Ctrl++)", self.zoom_in_requested.emit, True),
+            ("Zoom Out", "Zoom out (Ctrl+-)", self.zoom_out_requested.emit, True),
+            ("Fit Page", "Fit page to window (Ctrl+0)", lambda: None, True),
         ])
         layout.addWidget(view_group)
         
@@ -186,7 +210,7 @@ class Toolbar(QToolBar):
         
         # Rotate group
         rotate_group = self._create_tool_group("Rotate", [
-            (f"{Icons.ROTATE}\nRotate", "Rotate page (Ctrl+R)", self.rotate_requested.emit, True),
+            ("Rotate", "Rotate page (Ctrl+R)", self.rotate_requested.emit, True),
         ])
         layout.addWidget(rotate_group)
         
@@ -212,8 +236,8 @@ class Toolbar(QToolBar):
         
         # Undo/Redo group
         history_group = self._create_tool_group("History", [
-            (f"{Icons.UNDO}\nUndo", "Undo (Ctrl+Z)", self.undo_requested.emit, True),
-            (f"{Icons.REDO}\nRedo", "Redo (Ctrl+Y)", self.redo_requested.emit, True),
+            ("Undo", "Undo (Ctrl+Z)", self.undo_requested.emit, True),
+            ("Redo", "Redo (Ctrl+Y)", self.redo_requested.emit, True),
         ])
         layout.addWidget(history_group)
         
@@ -221,9 +245,9 @@ class Toolbar(QToolBar):
         
         # Clipboard group
         clipboard_group = self._create_tool_group("Clipboard", [
-            ("✂\nCut", "Cut selected text (Ctrl+X)", self.cut_requested.emit, True),
-            ("📋\nCopy", "Copy selected text or image (Ctrl+C)", self.copy_requested.emit, True),
-            ("📄\nPaste", "Paste from clipboard (Ctrl+V)", self.paste_requested.emit, True),
+            ("Cut", "Cut selected text (Ctrl+X)", self.cut_requested.emit, True),
+            ("Copy", "Copy selected text or image (Ctrl+C)", self.copy_requested.emit, True),
+            ("Paste", "Paste from clipboard (Ctrl+V)", self.paste_requested.emit, True),
         ])
         layout.addWidget(clipboard_group)
         
@@ -231,8 +255,8 @@ class Toolbar(QToolBar):
         
         # Selection group
         selection_group = self._create_tool_group("Selection", [
-            ("⬜\nSelect All", "Select all text on page (Ctrl+A)", self.select_all_requested.emit, True),
-            ("🗑\nDelete", "Delete selected content (Del)", self.delete_requested.emit, True),
+            ("Select All", "Select all text on page (Ctrl+A)", self.select_all_requested.emit, True),
+            ("Delete", "Delete selected content (Del)", self.delete_requested.emit, True),
         ])
         layout.addWidget(selection_group)
         
@@ -259,9 +283,9 @@ class Toolbar(QToolBar):
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
-        # Select Text toggle button
+        # Select Text toggle button with professional styling
         self._select_text_button = QToolButton()
-        self._select_text_button.setText("🖱\nSelect Text")
+        self._select_text_button.setText("Select Text")
         self._select_text_button.setToolTip(
             "Toggle text selection mode\n\n"
             "When ON: Click and drag to select text\n"
@@ -270,10 +294,44 @@ class Toolbar(QToolBar):
         )
         self._select_text_button.setCheckable(True)
         self._select_text_button.setChecked(False)  # Default to pan mode
-        self._select_text_button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self._select_text_button.setAutoRaise(True)
-        self._select_text_button.setMinimumWidth(80)
+        self._select_text_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self._select_text_button.setAutoRaise(False)
+        self._select_text_button.setMinimumWidth(85)
+        self._select_text_button.setMinimumHeight(40)
         self._select_text_button.toggled.connect(self.select_text_toggled.emit)
+        
+        # Apply toggle button styling
+        self._select_text_button.setStyleSheet("""
+            QToolButton {
+                background-color: #f8f8f8;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-size: 11px;
+                font-weight: 500;
+                color: #333333;
+            }
+            QToolButton:checked {
+                background-color: #0078d4;
+                border-color: #0078d4;
+                color: white;
+                font-weight: 600;
+            }
+            QToolButton:hover {
+                background-color: #0078d4;
+                border-color: #0078d4;
+                color: white;
+            }
+            QToolButton:pressed {
+                background-color: #005a9e;
+                border-color: #005a9e;
+            }
+            QToolButton:disabled {
+                background-color: #f0f0f0;
+                color: #a0a0a0;
+                border-color: #e0e0e0;
+            }
+        """)
         
         # Add to document actions
         self._document_actions.append(self._select_text_button)
@@ -302,8 +360,8 @@ class Toolbar(QToolBar):
         
         # Markup group (coming soon features)
         markup_group = self._create_tool_group("More Markup", [
-            ("📝\nUnderline", "Underline text (Coming soon)", lambda: self._show_coming_soon("Underline"), True),
-            ("⚡\nStrikeout", "Strikethrough text (Coming soon)", lambda: self._show_coming_soon("Strikethrough"), True),
+            ("Underline", "Underline text (Coming soon)", lambda: self._show_coming_soon("Underline"), True),
+            ("Strikeout", "Strikethrough text (Coming soon)", lambda: self._show_coming_soon("Strikethrough"), True),
         ])
         layout.addWidget(markup_group)
         
@@ -311,8 +369,8 @@ class Toolbar(QToolBar):
         
         # Comments group
         comments_group = self._create_tool_group("Comments", [
-            (f"{Icons.COMMENT}\nComment", "Add comment (Coming soon)", lambda: self._show_coming_soon("Comment"), True),
-            (f"{Icons.NOTE}\nNote", "Add sticky note (Coming soon)", lambda: self._show_coming_soon("Note"), True),
+            ("Comment", "Add comment (Coming soon)", lambda: self._show_coming_soon("Comment"), True),
+            ("Note", "Add sticky note (Coming soon)", lambda: self._show_coming_soon("Note"), True),
         ])
         layout.addWidget(comments_group)
         
@@ -343,9 +401,9 @@ class Toolbar(QToolBar):
         content_layout = QHBoxLayout()
         content_layout.setSpacing(Spacing.SMALL)
         
-        # Highlight toggle button
+        # Highlight toggle button with professional styling
         self._highlight_button = QToolButton()
-        self._highlight_button.setText(f"{Icons.HIGHLIGHT}\nHighlight")
+        self._highlight_button.setText("Highlight")
         self._highlight_button.setToolTip(
             "Toggle highlight mode\n\n"
             "When ON: Select text to highlight\n"
@@ -354,11 +412,49 @@ class Toolbar(QToolBar):
         )
         self._highlight_button.setCheckable(True)
         self._highlight_button.setChecked(False)
-        self._highlight_button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self._highlight_button.setAutoRaise(True)
-        self._highlight_button.setMinimumWidth(70)
-        self._highlight_button.setFixedHeight(50)
+        self._highlight_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self._highlight_button.setAutoRaise(False)
+        self._highlight_button.setMinimumWidth(75)
+        self._highlight_button.setMinimumHeight(40)
         self._highlight_button.toggled.connect(self._on_highlight_toggled)
+        
+        # Apply professional toggle button styling
+        self._highlight_button.setStyleSheet("""
+            QToolButton {
+                background-color: #f8f8f8;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-size: 11px;
+                font-weight: 500;
+                color: #333333;
+            }
+            QToolButton:checked {
+                background-color: #FFB900;
+                border-color: #FFB900;
+                color: #333333;
+                font-weight: 600;
+            }
+            QToolButton:hover {
+                background-color: #0078d4;
+                border-color: #0078d4;
+                color: white;
+            }
+            QToolButton:checked:hover {
+                background-color: #FFA500;
+                border-color: #FFA500;
+            }
+            QToolButton:pressed {
+                background-color: #005a9e;
+                border-color: #005a9e;
+            }
+            QToolButton:disabled {
+                background-color: #f0f0f0;
+                color: #a0a0a0;
+                border-color: #e0e0e0;
+            }
+        """)
+        
         self._document_actions.append(self._highlight_button)
         content_layout.addWidget(self._highlight_button)
         
@@ -474,9 +570,9 @@ class Toolbar(QToolBar):
         
         # Organize group
         organize_group = self._create_tool_group("Organize", [
-            ("➕\nInsert", "Insert page", lambda: self._show_coming_soon("Insert Page"), True),
-            ("➖\nDelete", "Delete page", lambda: self._show_coming_soon("Delete Page"), True),
-            ("📤\nExtract", "Extract pages", lambda: self._show_coming_soon("Extract Pages"), True),
+            ("Insert", "Insert page", lambda: self._show_coming_soon("Insert Page"), True),
+            ("Delete", "Delete page", lambda: self._show_coming_soon("Delete Page"), True),
+            ("Extract", "Extract pages", lambda: self._show_coming_soon("Extract Pages"), True),
         ])
         layout.addWidget(organize_group)
         
@@ -484,9 +580,9 @@ class Toolbar(QToolBar):
         
         # Manipulate group
         manipulate_group = self._create_tool_group("Manipulate", [
-            (f"{Icons.ROTATE}\nRotate", "Rotate page", self.rotate_requested.emit, True),
-            ("✂\nCrop", "Crop page", lambda: self._show_coming_soon("Crop Page"), True),
-            ("🔄\nReorder", "Reorder pages", lambda: self._show_coming_soon("Reorder Pages"), True),
+            ("Rotate", "Rotate page", self.rotate_requested.emit, True),
+            ("Crop", "Crop page", lambda: self._show_coming_soon("Crop Page"), True),
+            ("Reorder", "Reorder pages", lambda: self._show_coming_soon("Reorder Pages"), True),
         ])
         layout.addWidget(manipulate_group)
         
@@ -506,9 +602,9 @@ class Toolbar(QToolBar):
         
         # Export group
         export_group = self._create_tool_group("Export", [
-            (f"{Icons.EXPORT}\nWord", "Export to Word", lambda: self._show_coming_soon("Export to Word"), True),
-            (f"{Icons.EXPORT}\nExcel", "Export to Excel", lambda: self._show_coming_soon("Export to Excel"), True),
-            (f"{Icons.EXPORT}\nImage", "Export to Image", lambda: self._show_coming_soon("Export to Image"), True),
+            ("To Word", "Export to Word", lambda: self._show_coming_soon("Export to Word"), True),
+            ("To Excel", "Export to Excel", lambda: self._show_coming_soon("Export to Excel"), True),
+            ("To Image", "Export to Image", lambda: self._show_coming_soon("Export to Image"), True),
         ])
         layout.addWidget(export_group)
         
@@ -516,8 +612,8 @@ class Toolbar(QToolBar):
         
         # Import group
         import_group = self._create_tool_group("Import", [
-            (f"{Icons.IMPORT}\nFrom Word", "Import Word doc", lambda: self._show_coming_soon("Import Word"), True),
-            (f"{Icons.IMPORT}\nFrom Image", "Import image", lambda: self._show_coming_soon("Import Image"), True),
+            ("From Word", "Import Word doc", lambda: self._show_coming_soon("Import Word"), True),
+            ("From Image", "Import image", lambda: self._show_coming_soon("Import Image"), True),
         ])
         layout.addWidget(import_group)
         
@@ -525,7 +621,7 @@ class Toolbar(QToolBar):
         
         # OCR group
         ocr_group = self._create_tool_group("OCR", [
-            ("🔍\nScan Text", "OCR recognition", lambda: self._show_coming_soon("OCR"), True),
+            ("Scan Text", "OCR recognition", lambda: self._show_coming_soon("OCR"), True),
         ])
         layout.addWidget(ocr_group)
         
@@ -533,7 +629,7 @@ class Toolbar(QToolBar):
     
     def _create_tool_group(self, title: str, tools: list) -> QWidget:
         """
-        Create a group of tool buttons.
+        Create a group of tool buttons with professional styling and SVG icons.
         
         Args:
             title: Group title
@@ -560,15 +656,84 @@ class Toolbar(QToolBar):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(Spacing.SMALL)
         
+        # Icon name mapping (button text -> icon name)
+        icon_mapping = {
+            'Open': 'file_open',
+            'Save': 'save',
+            'Print': 'print',
+            'Zoom In': 'zoom_in',
+            'Zoom Out': 'zoom_out',
+            'Fit Page': 'zoom_out',
+            'Rotate': 'rotate',
+            'Undo': 'undo',
+            'Redo': 'redo',
+            'Cut': 'cut',
+            'Copy': 'copy',
+            'Paste': 'paste',
+            'Select All': 'select_all',
+            'Delete': 'delete',
+            'Underline': 'highlight',
+            'Strikeout': 'highlight',
+            'Comment': 'comment',
+            'Note': 'note',
+            'Insert': 'pages',
+            'Extract': 'pages',
+            'Crop': 'pages',
+            'Reorder': 'pages',
+            'To Word': 'save',
+            'To Excel': 'save',
+            'To Image': 'save',
+            'From Word': 'file_open',
+            'From Image': 'file_open',
+            'Scan Text': 'search',
+        }
+        
         for text, tooltip, callback, is_doc_action in tools:
             btn = QToolButton()
             btn.setText(text)
-            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            
+            # Add SVG icon if available
+            icon_name = icon_mapping.get(text)
+            if icon_name:
+                icon = get_icon(icon_name, 20)
+                btn.setIcon(icon)
+                btn.setIconSize(btn.iconSize() * 1.2)
+                btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            else:
+                btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
+            
             btn.setToolTip(tooltip)
-            btn.setAutoRaise(True)
-            btn.setMinimumWidth(60)
-            btn.setFixedHeight(50)  # Fixed height to prevent shift on click
+            btn.setAutoRaise(False)
+            btn.setMinimumWidth(70)
+            btn.setMinimumHeight(40)
             btn.clicked.connect(callback)
+            
+            # Apply professional button styling
+            btn.setStyleSheet("""
+                QToolButton {
+                    background-color: #f8f8f8;
+                    border: 1px solid #d0d0d0;
+                    border-radius: 4px;
+                    padding: 8px 12px;
+                    font-size: 11px;
+                    font-weight: 500;
+                    color: #333333;
+                }
+                QToolButton:hover {
+                    background-color: #0078d4;
+                    border-color: #0078d4;
+                    color: white;
+                }
+                QToolButton:pressed {
+                    background-color: #005a9e;
+                    border-color: #005a9e;
+                }
+                QToolButton:disabled {
+                    background-color: #f0f0f0;
+                    color: #a0a0a0;
+                    border-color: #e0e0e0;
+                }
+            """)
             
             if is_doc_action:
                 self._document_actions.append(btn)

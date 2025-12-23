@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from utils.constants import WindowDefaults, Icons, Spacing, Fonts
+from utils.icon_manager import get_icon
 
 
 class LeftSidebar(QDockWidget):
@@ -131,7 +132,7 @@ class LeftSidebar(QDockWidget):
         # Thumbnail generator (will be set when document loads)
         self.thumbnail_generator = None
         
-        self.tabs.addTab(pages_widget, Icons.PAGES)
+        self.tabs.addTab(pages_widget, get_icon('pages', 16), "")
         self.tabs.setTabToolTip(0, "Pages")
     
     def _create_bookmarks_tab(self):
@@ -161,7 +162,7 @@ class LeftSidebar(QDockWidget):
         self.bookmarks_panel.hide()
         self.bookmarks_placeholder.show()
         
-        self.tabs.addTab(bookmarks_container, Icons.BOOKMARKS)
+        self.tabs.addTab(bookmarks_container, get_icon('bookmarks', 16), "")
         self.tabs.setTabToolTip(1, "Bookmarks")
     
     def _create_comments_tab(self):
@@ -208,7 +209,7 @@ class LeftSidebar(QDockWidget):
         
         layout.addLayout(sort_layout)
         
-        self.tabs.addTab(comments_widget, Icons.COMMENT)
+        self.tabs.addTab(comments_widget, get_icon('comment', 16), "")
         self.tabs.setTabToolTip(2, "Comments")
     
     def _create_search_tab(self):
@@ -221,7 +222,7 @@ class LeftSidebar(QDockWidget):
         self.search_panel.result_selected.connect(self._on_search_result_selected)
         self.search_panel.clear_highlights.connect(self._on_clear_search_highlights)
         
-        self.tabs.addTab(self.search_panel, Icons.SEARCH)
+        self.tabs.addTab(self.search_panel, get_icon('search', 16), "")
         self.tabs.setTabToolTip(3, "Search")
     
     def _create_layers_tab(self):
@@ -267,7 +268,7 @@ class LeftSidebar(QDockWidget):
         
         layout.addLayout(action_layout)
         
-        self.tabs.addTab(layers_widget, "📄")
+        self.tabs.addTab(layers_widget, get_icon('layers', 16), "")
         self.tabs.setTabToolTip(4, "Layers")
     
     def _on_search_requested(self, search_term: str, options: dict):
@@ -357,8 +358,8 @@ class LeftSidebar(QDockWidget):
         
         menu = QMenu(self)
         
-        # Add menu actions
-        go_action = menu.addAction(f"{Icons.PAGES} Go to Page {page_num + 1}")
+        # Add menu actions with SVG icon
+        go_action = menu.addAction(get_icon('pages', 16), f"Go to Page {page_num + 1}")
         go_action.triggered.connect(lambda: self.page_selected.emit(page_num))
         
         menu.addSeparator()
