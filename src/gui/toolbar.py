@@ -30,6 +30,13 @@ class Toolbar(QToolBar):
     undo_requested = Signal()
     redo_requested = Signal()
     
+    # Edit actions
+    cut_requested = Signal()
+    copy_requested = Signal()
+    paste_requested = Signal()
+    select_all_requested = Signal()
+    delete_requested = Signal()
+    
     zoom_in_requested = Signal()
     zoom_out_requested = Signal()
     rotate_requested = Signal()
@@ -214,9 +221,9 @@ class Toolbar(QToolBar):
         
         # Clipboard group
         clipboard_group = self._create_tool_group("Clipboard", [
-            ("✂\nCut", "Cut (Ctrl+X)", lambda: self._show_coming_soon("Cut"), True),
-            ("📋\nCopy", "Copy (Ctrl+C)", lambda: self._show_coming_soon("Copy"), True),
-            ("📄\nPaste", "Paste (Ctrl+V)", lambda: self._show_coming_soon("Paste"), True),
+            ("✂\nCut", "Cut selected text (Ctrl+X)", self.cut_requested.emit, True),
+            ("📋\nCopy", "Copy selected text or image (Ctrl+C)", self.copy_requested.emit, True),
+            ("📄\nPaste", "Paste from clipboard (Ctrl+V)", self.paste_requested.emit, True),
         ])
         layout.addWidget(clipboard_group)
         
@@ -224,8 +231,8 @@ class Toolbar(QToolBar):
         
         # Selection group
         selection_group = self._create_tool_group("Selection", [
-            ("⬜\nSelect All", "Select all (Ctrl+A)", lambda: self._show_coming_soon("Select All"), True),
-            ("🗑\nDelete", "Delete selected", lambda: self._show_coming_soon("Delete"), True),
+            ("⬜\nSelect All", "Select all text on page (Ctrl+A)", self.select_all_requested.emit, True),
+            ("🗑\nDelete", "Delete selected content (Del)", self.delete_requested.emit, True),
         ])
         layout.addWidget(selection_group)
         

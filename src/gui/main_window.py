@@ -135,6 +135,14 @@ class MainWindow(QMainWindow):
         self.toolbar_widget.print_requested.connect(self._handle_print)
         self.toolbar_widget.undo_requested.connect(self._handle_undo)
         self.toolbar_widget.redo_requested.connect(self._handle_redo)
+        
+        # Edit actions from toolbar
+        self.toolbar_widget.cut_requested.connect(self.content_area.cut_selected_text)
+        self.toolbar_widget.copy_requested.connect(self.content_area.copy_selected_text)
+        self.toolbar_widget.paste_requested.connect(self.content_area.paste_from_clipboard)
+        self.toolbar_widget.select_all_requested.connect(self.content_area.select_all_text)
+        self.toolbar_widget.delete_requested.connect(self.content_area.delete_selected)
+        
         self.toolbar_widget.zoom_in_requested.connect(self._handle_zoom_in)
         self.toolbar_widget.zoom_out_requested.connect(self._handle_zoom_out)
         self.toolbar_widget.rotate_requested.connect(self._handle_rotate)

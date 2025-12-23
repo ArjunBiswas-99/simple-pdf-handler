@@ -823,6 +823,114 @@ class ContentArea(QGraphicsView):
             word_count = len(self._selected_text.split())
             self.text_copied.emit(f"Copied {word_count} words to clipboard")
     
+    def cut_selected_text(self):
+        """Cut the currently selected text (copy + delete)."""
+        if self._selected_text or self._selected_image:
+            # Copy to clipboard first
+            self.copy_selected_text()
+            
+            # Then clear the selection (in PDF viewing, cut = copy since we can't modify source text)
+            self.clear_selection()
+            
+            # Note: For PDF viewing, we can't actually delete text from the document
+            # Cut effectively becomes Copy in this context
+            from PySide6.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            if clipboard.text():
+                word_count = len(clipboard.text().split())
+                self.text_copied.emit(f"Cut {word_count} words to clipboard (PDF text cannot be removed)")
+    
+    def paste_from_clipboard(self):
+        """Paste text from clipboard (shows message - not implemented for PDF viewing)."""
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        
+        if text:
+            # In PDF viewing mode, we can't paste into the document
+            # This would require PDF editing features (Phase 2)
+            self.text_copied.emit("Paste not available in viewing mode (requires PDF editing)")
+        else:
+            self.text_copied.emit("Clipboard is empty")
+    
+    def select_all_text(self):
+        """Select all text on the current visible page."""
+        if not self._pdf_document or not self._pdf_document.is_open:
+            return
+        
+        # Clear any existing selection
+        self.clear_selection()
+        
+        # Get current visible page
+        current_page = self._current_page
+        
+        if current_page >= len(self._page_positions):
+            return
+        
+        from PySide6.QtWidgets import QGraphicsRectItem
+        from PySide6.QtGui import QColor, QPen, QBrush
+        
+        # Get page dimensions
+        page_size = self._pdf_document.get_page_size(current_page)
+        if not page_size:
+            return
+        
+        width, height = page_size
+        zoom_factor = self._pdf_document.zoom_level / 100.0
+        page_y_offset = self._page_positions[current_page]
+        
+        # Create selection rectangle covering entire page
+        page_rect = (0, 0, width, height)  # Full page in PDF coordinates
+        
+        # Get all text on this page
+        text = self._pdf_document.get_text_in_rect(current_page, page_rect)
+        
+        if not text:
+            self.text_selected.emit("No text found on current page")
+            return
+        
+        # Get word boxes for highlighting
+        word_boxes = self._pdf_document.get_word_boxes_in_rect(current_page, page_rect)
+        
+        # Draw yellow highlights for each word
+        for wx0, wy0, wx1, wy1, word_text in word_boxes:
+            # Convert word box to scene coordinates
+            scene_x0 = wx0 * zoom_factor
+            scene_y0 = (wy0 * zoom_factor) + page_y_offset
+            scene_x1 = wx1 * zoom_factor
+            scene_y1 = (wy1 * zoom_factor) + page_y_offset
+            
+            # Create highlight rectangle
+            highlight_rect = QRectF(scene_x0, scene_y0, scene_x1 - scene_x0, scene_y1 - scene_y0)
+            highlight_item = QGraphicsRectItem(highlight_rect)
+            
+            # Style: Yellow with 40% opacity
+            yellow_color = QColor(255, 255, 0, 102)  # RGBA: Yellow with 40% alpha
+            highlight_item.setBrush(QBrush(yellow_color))
+            highlight_item.setPen(QPen(Qt.NoPen))
+            
+            # Add to scene and track
+            self.scene.addItem(highlight_item)
+            self._selected_word_rects.append(highlight_item)
+        
+        # Store selected text
+        self._selected_text = text
+        
+        # Emit signal
+        word_count = len(text.split())
+        self.text_selected.emit(f"Selected all text on page {current_page + 1} ({word_count} words) - Press Ctrl+C to copy")
+    
+    def delete_selected(self):
+        """Delete selected content (clears selection - cannot actually delete from PDF)."""
+        if self._selected_text or self._selected_image:
+            # In PDF viewing mode, we can only clear the selection
+            # Actual deletion would require PDF editing features (Phase 2)
+            self.clear_selection()
+            self.text_copied.emit("Selection cleared (PDF content cannot be deleted in viewing mode)")
+        else:
+            self.text_copied.emit("Nothing selected to delete")
+    
     def _find_image_at_position(self, scene_pos: QPointF):
         """
         Find if click position is on an image.
