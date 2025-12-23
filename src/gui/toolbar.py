@@ -48,6 +48,9 @@ class Toolbar(QToolBar):
     highlight_mode_toggled = Signal(bool)  # Emitted when highlight mode is toggled
     annotation_color_changed = Signal(tuple)  # Emitted when annotation color changes (RGB 0-255)
     
+    # OCR signal
+    quick_ocr_requested = Signal()
+    
     def __init__(self, parent=None):
         """
         Initialize toolbar.
@@ -619,11 +622,74 @@ class Toolbar(QToolBar):
         
         layout.addWidget(self._create_separator())
         
-        # OCR group
-        ocr_group = self._create_tool_group("OCR", [
-            ("Scan Text", "OCR recognition", lambda: self._show_coming_soon("OCR"), True),
-        ])
+        # OCR group with working button
+        ocr_group = self._create_ocr_group()
         layout.addWidget(ocr_group)
+        
+        return widget
+    
+    def _create_ocr_group(self) -> QWidget:
+        """
+        Create OCR tool group with working button.
+        
+        Returns:
+            Widget containing OCR tools
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        
+        # Group title
+        title_label = QLabel("OCR")
+        title_font = QFont()
+        title_font.setPointSize(Fonts.SIZE_SMALL)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # OCR button
+        ocr_btn = QToolButton()
+        ocr_btn.setText("Scan Text")
+        ocr_btn.setIcon(get_icon('file_text', 20))
+        ocr_btn.setIconSize(ocr_btn.iconSize() * 1.2)
+        ocr_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        ocr_btn.setToolTip("Quick OCR - Convert scanned pages to searchable text (Ctrl+Shift+O)")
+        ocr_btn.setAutoRaise(False)
+        ocr_btn.setMinimumWidth(90)
+        ocr_btn.setMinimumHeight(40)
+        ocr_btn.clicked.connect(self.quick_ocr_requested.emit)
+        
+        # Apply professional button styling
+        ocr_btn.setStyleSheet("""
+            QToolButton {
+                background-color: #f8f8f8;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-size: 11px;
+                font-weight: 500;
+                color: #333333;
+            }
+            QToolButton:hover {
+                background-color: #0078d4;
+                border-color: #0078d4;
+                color: white;
+            }
+            QToolButton:pressed {
+                background-color: #005a9e;
+                border-color: #005a9e;
+            }
+            QToolButton:disabled {
+                background-color: #f0f0f0;
+                color: #a0a0a0;
+                border-color: #e0e0e0;
+            }
+        """)
+        
+        self._document_actions.append(ocr_btn)
+        layout.addWidget(ocr_btn)
         
         return widget
     

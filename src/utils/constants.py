@@ -208,6 +208,112 @@ class Icons:
     PROPERTIES = "📋"
 
 
+class OCRLanguages:
+    """OCR language definitions and metadata."""
+    
+    # Pre-installed languages (6 default languages)
+    PRE_INSTALLED = ['en', 'es', 'zh', 'hi', 'bn', 'de']
+    
+    # Language metadata: code -> (name, size_mb)
+    LANGUAGES = {
+        # Pre-installed
+        'en': ('English', 3.5),
+        'es': ('Spanish', 4.2),
+        'zh': ('Chinese Simplified', 18.1),
+        'hi': ('Hindi', 11.2),
+        'bn': ('Bengali', 10.8),
+        'de': ('German', 4.5),
+        
+        # Additional available languages
+        'fr': ('French', 4.3),
+        'it': ('Italian', 4.1),
+        'pt': ('Portuguese', 4.2),
+        'ru': ('Russian', 12.5),
+        'ja': ('Japanese', 15.8),
+        'ko': ('Korean', 13.2),
+        'ar': ('Arabic', 9.8),
+        'th': ('Thai', 8.5),
+        'vi': ('Vietnamese', 7.2),
+        'nl': ('Dutch', 4.0),
+        'pl': ('Polish', 4.8),
+        'tr': ('Turkish', 5.1),
+        'id': ('Indonesian', 3.9),
+        'ms': ('Malay', 3.7),
+        'tl': ('Tagalog', 3.8),
+    }
+    
+    @classmethod
+    def get_language_name(cls, code: str) -> str:
+        """Get human-readable language name."""
+        return cls.LANGUAGES.get(code, ('Unknown', 0))[0]
+    
+    @classmethod
+    def get_language_size(cls, code: str) -> float:
+        """Get language pack size in MB."""
+        return cls.LANGUAGES.get(code, ('Unknown', 0))[1]
+
+
+class OCRSettings:
+    """OCR configuration constants."""
+    
+    # Output format options
+    OUTPUT_SEARCHABLE_PDF = 'searchable_pdf'
+    OUTPUT_EDITABLE_TEXT = 'editable_text'
+    
+    # Save behavior options
+    SAVE_ALWAYS_ASK = 'always_ask'
+    SAVE_AUTO_SAVE = 'auto_save'
+    SAVE_AS_NEW = 'save_as_new'
+    
+    # Confidence threshold range
+    MIN_CONFIDENCE = 0
+    MAX_CONFIDENCE = 100
+    DEFAULT_CONFIDENCE = 75
+    
+    # Processing timeout per page (seconds)
+    PAGE_TIMEOUT = 30
+    
+    # Maximum parallel processing threads
+    MAX_THREADS = 4
+
+
+class OCRMessages:
+    """User-facing messages for OCR operations."""
+    
+    # Detection banner
+    BANNER_TITLE = "This appears to be a scanned document"
+    BANNER_MESSAGE = "Make it searchable and editable with OCR"
+    
+    # Progress messages
+    PROGRESS_PREPARING = "Preparing document..."
+    PROGRESS_ENHANCING = "Enhancing image quality..."
+    PROGRESS_STRAIGHTENING = "Straightening page..."
+    PROGRESS_REMOVING_NOISE = "Removing background noise..."
+    PROGRESS_RECOGNIZING = "Recognizing text..."
+    PROGRESS_ADDING_LAYER = "Adding text layer..."
+    PROGRESS_OPTIMIZING = "Optimizing file size..."
+    
+    # Success messages
+    SUCCESS_TITLE = "OCR Complete!"
+    SUCCESS_MESSAGE = "Your document is now searchable and text can be selected."
+    
+    # Error messages
+    ERROR_NO_TEXT = "Could not recognize any text in this document."
+    ERROR_LOW_QUALITY = "Image quality is too low for reliable OCR. Please rescan at higher resolution."
+    ERROR_LANGUAGE_MISSING = "Language pack not installed. Would you like to download it now?"
+    ERROR_PROCESSING = "An error occurred during OCR processing."
+    ERROR_SAVE_FAILED = "Failed to save OCR results to file."
+    
+    # Tips (shown during processing)
+    TIPS = [
+        "💡 Tip: OCR accuracy is highest with clean, well-lit scans.",
+        "💡 Tip: For best results, scan documents at 300 DPI or higher.",
+        "💡 Tip: Straight pages work better than tilted scans.",
+        "💡 Tip: Remove shadows and background colors before scanning.",
+        "💡 Tip: Multi-language documents may need language selection.",
+    ]
+
+
 def get_theme_colors(theme: str = 'light') -> Dict[str, str]:
     """
     Get color palette for specified theme.

@@ -265,6 +265,183 @@ class Config:
         """
         self.settings.setValue("file/last_directory", directory)
     
+    # OCR settings
+    def get_ocr_default_language(self) -> str:
+        """
+        Get default OCR language preference.
+        
+        Returns:
+            Language code ('auto', 'en', 'es', etc.)
+        """
+        return self.settings.value("ocr/default_language", "auto", str)
+    
+    def set_ocr_default_language(self, language: str) -> None:
+        """
+        Save default OCR language.
+        
+        Args:
+            language: Language code
+        """
+        self.settings.setValue("ocr/default_language", language)
+    
+    def get_ocr_save_behavior(self) -> str:
+        """
+        Get OCR save behavior preference.
+        
+        Returns:
+            Save behavior ('always_ask', 'auto_save', 'save_as_new')
+        """
+        return self.settings.value("ocr/save_behavior", "always_ask", str)
+    
+    def set_ocr_save_behavior(self, behavior: str) -> None:
+        """
+        Save OCR save behavior.
+        
+        Args:
+            behavior: Save behavior option
+        """
+        self.settings.setValue("ocr/save_behavior", behavior)
+    
+    def get_ocr_auto_deskew(self) -> bool:
+        """Get auto-deskew preference."""
+        return self.settings.value("ocr/auto_deskew", True, bool)
+    
+    def set_ocr_auto_deskew(self, enabled: bool) -> None:
+        """Save auto-deskew preference."""
+        self.settings.setValue("ocr/auto_deskew", enabled)
+    
+    def get_ocr_despeckle(self) -> bool:
+        """Get despeckle preference."""
+        return self.settings.value("ocr/despeckle", True, bool)
+    
+    def set_ocr_despeckle(self, enabled: bool) -> None:
+        """Save despeckle preference."""
+        self.settings.setValue("ocr/despeckle", enabled)
+    
+    def get_ocr_enhance_image(self) -> bool:
+        """Get image enhancement preference."""
+        return self.settings.value("ocr/enhance_image", True, bool)
+    
+    def set_ocr_enhance_image(self, enabled: bool) -> None:
+        """Save image enhancement preference."""
+        self.settings.setValue("ocr/enhance_image", enabled)
+    
+    def get_ocr_compress_output(self) -> bool:
+        """Get output compression preference."""
+        return self.settings.value("ocr/compress_output", True, bool)
+    
+    def set_ocr_compress_output(self, enabled: bool) -> None:
+        """Save output compression preference."""
+        self.settings.setValue("ocr/compress_output", enabled)
+    
+    def get_ocr_detect_tables(self) -> bool:
+        """Get table detection preference."""
+        return self.settings.value("ocr/detect_tables", True, bool)
+    
+    def set_ocr_detect_tables(self, enabled: bool) -> None:
+        """Save table detection preference."""
+        self.settings.setValue("ocr/detect_tables", enabled)
+    
+    def get_ocr_highlight_uncertain(self) -> bool:
+        """Get uncertain text highlighting preference."""
+        return self.settings.value("ocr/highlight_uncertain", True, bool)
+    
+    def set_ocr_highlight_uncertain(self, enabled: bool) -> None:
+        """Save uncertain text highlighting preference."""
+        self.settings.setValue("ocr/highlight_uncertain", enabled)
+    
+    def get_ocr_confidence_threshold(self) -> int:
+        """
+        Get OCR confidence threshold (0-100).
+        
+        Returns:
+            Threshold percentage
+        """
+        return self.settings.value("ocr/confidence_threshold", 75, int)
+    
+    def set_ocr_confidence_threshold(self, threshold: int) -> None:
+        """
+        Save OCR confidence threshold.
+        
+        Args:
+            threshold: Threshold percentage (0-100)
+        """
+        self.settings.setValue("ocr/confidence_threshold", threshold)
+    
+    def get_ocr_installed_languages(self) -> List[str]:
+        """
+        Get list of installed OCR language codes.
+        
+        Returns:
+            List of language codes
+        """
+        # Default pre-installed languages
+        default_langs = ["en", "es", "zh", "hi", "bn", "de"]
+        size = self.settings.beginReadArray("ocr/installed_languages")
+        if size == 0:
+            self.settings.endArray()
+            return default_langs
+        
+        languages = []
+        for i in range(size):
+            self.settings.setArrayIndex(i)
+            lang = self.settings.value("code", "", str)
+            if lang:
+                languages.append(lang)
+        self.settings.endArray()
+        return languages if languages else default_langs
+    
+    def set_ocr_installed_languages(self, languages: List[str]) -> None:
+        """
+        Save list of installed OCR languages.
+        
+        Args:
+            languages: List of language codes
+        """
+        self.settings.beginWriteArray("ocr/installed_languages")
+        for i, lang in enumerate(languages):
+            self.settings.setArrayIndex(i)
+            self.settings.setValue("code", lang)
+        self.settings.endArray()
+    
+    def get_ocr_statistics(self) -> Dict[str, Any]:
+        """
+        Get OCR usage statistics.
+        
+        Returns:
+            Dictionary with statistics
+        """
+        return {
+            "total_ocr_runs": self.settings.value("ocr/stats/total_runs", 0, int),
+            "total_pages_processed": self.settings.value("ocr/stats/total_pages", 0, int),
+            "total_words_recognized": self.settings.value("ocr/stats/total_words", 0, int),
+            "average_confidence": self.settings.value("ocr/stats/avg_confidence", 0.0, float),
+        }
+    
+    def update_ocr_statistics(self, pages: int, words: int, confidence: float) -> None:
+        """
+        Update OCR statistics after a run.
+        
+        Args:
+            pages: Number of pages processed
+            words: Number of words recognized
+            confidence: Average confidence score
+        """
+        stats = self.get_ocr_statistics()
+        stats["total_ocr_runs"] += 1
+        stats["total_pages_processed"] += pages
+        stats["total_words_recognized"] += words
+        
+        # Update running average confidence
+        total_runs = stats["total_ocr_runs"]
+        old_avg = stats["average_confidence"]
+        stats["average_confidence"] = ((old_avg * (total_runs - 1)) + confidence) / total_runs
+        
+        self.settings.setValue("ocr/stats/total_runs", stats["total_ocr_runs"])
+        self.settings.setValue("ocr/stats/total_pages", stats["total_pages_processed"])
+        self.settings.setValue("ocr/stats/total_words", stats["total_words_recognized"])
+        self.settings.setValue("ocr/stats/avg_confidence", stats["average_confidence"])
+    
     # Utility methods
     def reset_to_defaults(self) -> None:
         """Reset all settings to default values."""

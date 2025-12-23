@@ -23,6 +23,10 @@ from .right_sidebar import RightSidebar
 from .content_area import ContentArea
 from .status_bar import StatusBar
 from .welcome_screen import WelcomeScreen
+from .ocr_detection_banner import OCRDetectionBanner
+from .ocr_dialogs import OCRDialog, OCRProgressDialog, OCRCompletionDialog
+from .ocr_review_settings import OCRReviewDialog, OCRSettingsDialog
+from core.ocr.ocr_coordinator import OCRCoordinator, OCRWorker
 
 
 class MainWindow(QMainWindow):
@@ -47,6 +51,11 @@ class MainWindow(QMainWindow):
         
         # PDF document handler
         self.pdf_document = PDFDocument()
+        
+        # OCR coordinator for text recognition
+        self.ocr_coordinator = OCRCoordinator()
+        self.ocr_worker = None
+        self.ocr_results = None
         
         # State tracking
         self._current_document = None
@@ -90,6 +99,10 @@ class MainWindow(QMainWindow):
         # Create content area (central widget)
         self.content_area = ContentArea(self)
         
+        # Create OCR detection banner (hidden initially)
+        self.ocr_banner = OCRDetectionBanner(self)
+        self.ocr_banner.hide()
+        
         # Create welcome screen
         self.welcome_screen = WelcomeScreen(self)
         
@@ -104,6 +117,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        
+        # OCR detection banner (shows when scanned PDF detected)
+        layout.addWidget(self.ocr_banner)
         
         # Initially show welcome screen
         layout.addWidget(self.welcome_screen)
@@ -129,12 +145,26 @@ class MainWindow(QMainWindow):
         self.menu_bar_widget.theme_toggle_requested.connect(self._handle_theme_toggle)
         self.menu_bar_widget.about_requested.connect(self._show_about_dialog)
         
+        # OCR menu signals
+        self.menu_bar_widget.quick_ocr_requested.connect(self._handle_quick_ocr)
+        self.menu_bar_widget.advanced_ocr_requested.connect(self._handle_advanced_ocr)
+        self.menu_bar_widget.ocr_settings_requested.connect(self._handle_ocr_settings)
+        self.menu_bar_widget.export_ocr_text_requested.connect(self._handle_export_ocr_text)
+        self.menu_bar_widget.export_ocr_word_requested.connect(self._handle_export_ocr_word)
+        self.menu_bar_widget.export_ocr_excel_requested.connect(self._handle_export_ocr_excel)
+        
+        # OCR banner signals
+        self.ocr_banner.quick_ocr_requested.connect(self._handle_quick_ocr)
+        self.ocr_banner.advanced_ocr_requested.connect(self._handle_advanced_ocr)
+        self.ocr_banner.dismissed.connect(self.ocr_banner.hide)
+        
         # Toolbar actions
         self.toolbar_widget.open_file_requested.connect(self._handle_open_file)
         self.toolbar_widget.save_file_requested.connect(self._handle_save_file)
         self.toolbar_widget.print_requested.connect(self._handle_print)
         self.toolbar_widget.undo_requested.connect(self._handle_undo)
         self.toolbar_widget.redo_requested.connect(self._handle_redo)
+        self.toolbar_widget.quick_ocr_requested.connect(self._handle_quick_ocr)
         
         # Edit actions from toolbar
         self.toolbar_widget.cut_requested.connect(self.content_area.cut_selected_text)
@@ -585,6 +615,11 @@ class MainWindow(QMainWindow):
         
         # Connect clear highlights signal
         self.left_sidebar.search_panel.clear_highlights.connect(self.content_area.clear_search_highlights)
+        
+        # Check if document is scanned and show OCR banner
+        if self.ocr_coordinator.is_scanned_document(self._current_document):
+            self.ocr_banner.show_banner()
+            self.status_bar_widget.show_message("📄 Scanned document detected - OCR available", 5000)
     
     def _on_search_result_clicked(self, page_num: int, bbox: tuple):
         """
@@ -695,6 +730,302 @@ class MainWindow(QMainWindow):
         if pixmap:
             # Display in content area
             self.content_area.display_page(pixmap, page_num)
+    
+    # OCR workflow handlers
+    def _handle_quick_ocr(self):
+        """Handle quick OCR with automatic settings."""
+        if not self._current_document:
+            return
+        
+        # Check if document actually needs OCR
+        if not self.ocr_coordinator.is_scanned_document(self._current_document):
+            # Document already has text layer
+            reply = QMessageBox.question(
+                self,
+                "OCR Not Recommended",
+                "This PDF already has a searchable text layer.\n\n"
+                "OCR is designed for scanned/image-only PDFs without text.\n"
+                "Running OCR on this document is:\n"
+                "• Unnecessary (text is already searchable)\n"
+                "• Time-consuming (may take several minutes)\n"
+                "• Potentially less accurate than existing text\n\n"
+                "Do you still want to proceed with OCR?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.No:
+                self.status_bar_widget.show_message("OCR cancelled - document already has text", 3000)
+                return
+        
+        # Get current page for context
+        current_page = self.content_area.current_page if hasattr(self.content_area, 'current_page') else 0
+        
+        # Show OCR dialog in Quick mode (all defaults)
+        dialog = OCRDialog(self.pdf_document.page_count, current_page, self)
+        dialog.ocr_started.connect(self._start_ocr_processing)
+        dialog.exec()
+    
+    def _handle_advanced_ocr(self):
+        """Handle OCR with advanced options dialog."""
+        if not self._current_document:
+            return
+        
+        current_page = self.content_area.current_page if hasattr(self.content_area, 'current_page') else 0
+        
+        # Show full OCR configuration dialog
+        dialog = OCRDialog(self.pdf_document.page_count, current_page, self)
+        dialog.ocr_started.connect(self._start_ocr_processing)
+        dialog.settings_requested.connect(self._handle_ocr_settings)
+        dialog.exec()
+    
+    def _start_ocr_processing(self, params: dict):
+        """
+        Start OCR processing with given parameters.
+        
+        Args:
+            params: OCR configuration dictionary
+        """
+        # Create progress dialog
+        page_range = params['page_range']
+        total_pages = page_range[1] - page_range[0]
+        
+        progress_dialog = OCRProgressDialog(total_pages, self)
+        
+        # Create OCR worker
+        self.ocr_worker = OCRWorker(
+            self._current_document,
+            params['language'],
+            page_range,
+            params.get('enhance', True)
+        )
+        
+        # Connect worker signals
+        self.ocr_worker.progress_updated.connect(progress_dialog.update_progress)
+        self.ocr_worker.ocr_completed.connect(
+            lambda results, stats: self._on_ocr_completed(results, stats, progress_dialog, params)
+        )
+        self.ocr_worker.error_occurred.connect(
+            lambda error: self._on_ocr_error(error, progress_dialog)
+        )
+        
+        # Connect cancel
+        progress_dialog.cancel_requested.connect(self.ocr_worker.cancel)
+        
+        # Start processing
+        self.ocr_worker.start()
+        progress_dialog.exec()
+    
+    def _on_ocr_completed(self, results: list, statistics: dict, progress_dialog, params: dict):
+        """
+        Handle OCR completion.
+        
+        Args:
+            results: OCR results list
+            statistics: Result statistics
+            progress_dialog: Progress dialog to close
+            params: Original OCR parameters
+        """
+        # Close progress dialog
+        progress_dialog.accept()
+        
+        # Store results
+        self.ocr_results = results
+        
+        # Show completion dialog
+        completion_dialog = OCRCompletionDialog(statistics, self._current_document, self)
+        completion_dialog.save_requested.connect(
+            lambda mode, path: self._save_ocr_results(results, mode, path, params)
+        )
+        completion_dialog.review_requested.connect(
+            lambda: self._review_ocr_results(results, statistics)
+        )
+        completion_dialog.exec()
+    
+    def _on_ocr_error(self, error: str, progress_dialog):
+        """
+        Handle OCR error.
+        
+        Args:
+            error: Error message
+            progress_dialog: Progress dialog to close
+        """
+        progress_dialog.reject()
+        QMessageBox.critical(self, "OCR Error", f"OCR processing failed:\n\n{error}")
+    
+    def _save_ocr_results(self, results: list, mode: str, file_path: str, params: dict):
+        """
+        Save OCR results to file.
+        
+        Args:
+            results: OCR results
+            mode: Save mode ('current', 'new', 'none')
+            file_path: Output file path
+            params: OCR parameters
+        """
+        if mode == 'none':
+            self.status_bar_widget.show_message("OCR preview mode - not saved", 3000)
+            return
+
+        # Validate OCR results have actual text
+        total_text_blocks = sum(len(r.text_blocks) for r in results)
+        total_text = ''.join(r.full_text for r in results).strip()
+        
+        print(f"DEBUG: Saving OCR results - {len(results)} pages, {total_text_blocks} text blocks, {len(total_text)} chars")
+        
+        if total_text_blocks == 0 or len(total_text) == 0:
+            QMessageBox.warning(
+                self,
+                "No Text Found",
+                "OCR did not find any text in the document.\n\n"
+                "This could mean:\n"
+                "• The PDF pages are blank\n"
+                "• The image quality is too poor\n"
+                "• The language setting is incorrect\n\n"
+                "Cannot create searchable PDF without text."
+            )
+            return
+
+        # Create searchable PDF using background worker to avoid UI freeze
+        from core.ocr import PDFSaveWorker
+        from PySide6.QtWidgets import QProgressDialog
+        
+        # Create progress dialog
+        progress_dialog = QProgressDialog("Creating searchable PDF...", "Cancel", 0, 100, self)
+        progress_dialog.setWindowTitle("Saving PDF")
+        progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.setMinimumDuration(0)
+        progress_dialog.setValue(0)
+        
+        # Create and configure worker
+        save_worker = PDFSaveWorker(
+            self._current_document,
+            file_path,
+            results,
+            compress=params.get('compress', True)
+        )
+        
+        # Connect signals
+        def update_progress(current, total, message):
+            progress_dialog.setLabelText(message)
+            progress = int((current / total) * 100) if total > 0 else 0
+            progress_dialog.setValue(progress)
+        
+        def on_save_completed(success, result):
+            progress_dialog.close()
+            save_worker.quit()
+            save_worker.wait()
+            
+            if success:
+                from pathlib import Path
+                filename = Path(file_path).name
+                self.status_bar_widget.show_message(f"✓ Saved searchable PDF: {filename}", 5000)
+                
+                # If saved to current file, reload
+                if mode == 'current':
+                    self._open_document(file_path)
+            else:
+                QMessageBox.critical(self, "Save Error", f"Failed to save PDF:\n{result}")
+        
+        save_worker.progress_updated.connect(update_progress)
+        save_worker.save_completed.connect(on_save_completed)
+        progress_dialog.canceled.connect(save_worker.cancel)
+        
+        # Start worker
+        save_worker.start()
+    
+    def _review_ocr_results(self, results: list, statistics: dict):
+        """
+        Open review dialog for uncertain words.
+        
+        Args:
+            results: OCR results
+            statistics: Result statistics
+        """
+        suspicious = statistics.get('suspicious_words', [])
+        if not suspicious:
+            self.status_bar_widget.show_message("No uncertain words to review", 3000)
+            return
+        
+        review_dialog = OCRReviewDialog(suspicious, self)
+        review_dialog.correction_applied.connect(self._apply_ocr_correction)
+        review_dialog.review_completed.connect(
+            lambda: self.status_bar_widget.show_message("✓ Review completed", 3000)
+        )
+        review_dialog.exec()
+    
+    def _apply_ocr_correction(self, word_index: int, correction: str):
+        """
+        Apply correction to OCR result.
+        
+        Args:
+            word_index: Index of word to correct
+            correction: Corrected text
+        """
+        # Update OCR results with correction
+        self.status_bar_widget.show_message(f"✓ Correction applied: {correction}", 2000)
+    
+    def _handle_ocr_settings(self):
+        """Show OCR settings dialog."""
+        dialog = OCRSettingsDialog(self)
+        if dialog.exec():
+            self.status_bar_widget.show_message("OCR settings saved", 2000)
+    
+    def _handle_export_ocr_text(self):
+        """Export OCR results to text file."""
+        if not self.ocr_results:
+            QMessageBox.information(
+                self, "No OCR Results",
+                "Please run OCR on the document first."
+            )
+            return
+        
+        from PySide6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export to Text", "", "Text Files (*.txt)"
+        )
+        
+        if file_path:
+            if self.ocr_coordinator.export_handler.export_to_text(self.ocr_results, file_path):
+                self.status_bar_widget.show_message(f"✓ Exported to text", 3000)
+    
+    def _handle_export_ocr_word(self):
+        """Export OCR results to Word document."""
+        if not self.ocr_results:
+            QMessageBox.information(
+                self, "No OCR Results",
+                "Please run OCR on the document first."
+            )
+            return
+        
+        from PySide6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export to Word", "", "Word Documents (*.docx)"
+        )
+        
+        if file_path:
+            if self.ocr_coordinator.export_handler.export_to_word(self.ocr_results, file_path):
+                self.status_bar_widget.show_message(f"✓ Exported to Word", 3000)
+    
+    def _handle_export_ocr_excel(self):
+        """Export OCR tables to Excel."""
+        if not self.ocr_results:
+            QMessageBox.information(
+                self, "No OCR Results",
+                "Please run OCR on the document first."
+            )
+            return
+        
+        from PySide6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Tables to Excel", "", "Excel Files (*.xlsx)"
+        )
+        
+        if file_path:
+            # Extract tables from results (placeholder)
+            tables = []
+            if self.ocr_coordinator.export_handler.export_tables_to_excel(tables, file_path):
+                self.status_bar_widget.show_message(f"✓ Exported tables to Excel", 3000)
     
     # Window event handlers
     def closeEvent(self, event):

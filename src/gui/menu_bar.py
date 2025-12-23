@@ -9,6 +9,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import Signal, Qt
 
 from utils.constants import Icons
+from utils.icon_manager import get_icon
 
 
 class MenuBar(QMenuBar):
@@ -39,6 +40,14 @@ class MenuBar(QMenuBar):
     theme_toggle_requested = Signal()
     fullscreen_requested = Signal()
     
+    # OCR signals
+    quick_ocr_requested = Signal()
+    advanced_ocr_requested = Signal()
+    ocr_settings_requested = Signal()
+    export_ocr_text_requested = Signal()
+    export_ocr_word_requested = Signal()
+    export_ocr_excel_requested = Signal()
+    
     about_requested = Signal()
     help_requested = Signal()
     
@@ -60,6 +69,7 @@ class MenuBar(QMenuBar):
         self._create_document_menu()
         self._create_page_menu()
         self._create_annotate_menu()
+        self._create_tools_menu()
         self._create_convert_menu()
         self._create_help_menu()
     
@@ -434,6 +444,66 @@ class MenuBar(QMenuBar):
         measure_action.setStatusTip("Measure distances and areas (Phase 2)")
         measure_action.triggered.connect(lambda: self._show_coming_soon("Measure Tool"))
         annotate_menu.addAction(measure_action)
+    
+    def _create_tools_menu(self):
+        """Create Tools menu with OCR and utility features."""
+        tools_menu = self.addMenu("&Tools")
+        
+        # OCR submenu with comprehensive options
+        ocr_menu = tools_menu.addMenu("🔍 OCR (Text Recognition)")
+        ocr_menu.setIcon(get_icon('file_text', 20))
+        
+        # Quick OCR - most common action
+        quick_ocr_action = QAction("⚡ Quick OCR (Auto-detect)", self)
+        quick_ocr_action.setShortcut("Ctrl+Shift+O")
+        quick_ocr_action.setStatusTip("Quick OCR with automatic settings")
+        quick_ocr_action.triggered.connect(self.quick_ocr_requested.emit)
+        ocr_menu.addAction(quick_ocr_action)
+        self._document_actions.append(quick_ocr_action)
+        
+        # Advanced OCR
+        advanced_ocr_action = QAction("⚙️ Advanced OCR Options...", self)
+        advanced_ocr_action.setShortcut("Ctrl+Alt+O")
+        advanced_ocr_action.setStatusTip("OCR with custom settings and options")
+        advanced_ocr_action.triggered.connect(self.advanced_ocr_requested.emit)
+        ocr_menu.addAction(advanced_ocr_action)
+        self._document_actions.append(advanced_ocr_action)
+        
+        ocr_menu.addSeparator()
+        
+        # Export OCR results submenu
+        export_ocr_menu = ocr_menu.addMenu("📤 Export OCR Results")
+        
+        export_text_action = QAction("Plain Text...", self)
+        export_text_action.setStatusTip("Export recognized text to TXT file")
+        export_text_action.triggered.connect(self.export_ocr_text_requested.emit)
+        export_ocr_menu.addAction(export_text_action)
+        self._document_actions.append(export_text_action)
+        
+        export_word_action = QAction("Word Document...", self)
+        export_word_action.setStatusTip("Export to Microsoft Word with formatting")
+        export_word_action.triggered.connect(self.export_ocr_word_requested.emit)
+        export_ocr_menu.addAction(export_word_action)
+        self._document_actions.append(export_word_action)
+        
+        export_excel_action = QAction("Excel Spreadsheet...", self)
+        export_excel_action.setStatusTip("Export detected tables to Excel")
+        export_excel_action.triggered.connect(self.export_ocr_excel_requested.emit)
+        export_ocr_menu.addAction(export_excel_action)
+        self._document_actions.append(export_excel_action)
+        
+        ocr_menu.addSeparator()
+        
+        # OCR Settings
+        ocr_settings_action = QAction("⚙️ OCR Settings...", self)
+        ocr_settings_action.setStatusTip("Configure OCR preferences and defaults")
+        ocr_settings_action.triggered.connect(self.ocr_settings_requested.emit)
+        ocr_menu.addAction(ocr_settings_action)
+        
+        tools_menu.addSeparator()
+        
+        # Additional tools can be added here in future
+        # (Batch processing, compare documents, etc.)
     
     def _create_convert_menu(self):
         """Create Convert menu with conversion options."""
