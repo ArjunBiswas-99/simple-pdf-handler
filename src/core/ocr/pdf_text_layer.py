@@ -44,27 +44,31 @@ class PDFTextLayer:
             True if successful, False otherwise
         """
         try:
+            # Use insert_text instead of insert_textbox for proper searchable text layer
             for text_block in ocr_result.text_blocks:
                 # Get bounding box
                 x1, y1, x2, y2 = text_block.bbox
                 
-                # Calculate text position and size
-                rect = fitz.Rect(x1, y1, x2, y2)
+                # Insert text at position using insert_text (more reliable for searchable text)
+                # Use bottom-left corner as insertion point (PyMuPDF convention)
+                point = fitz.Point(x1, y2)
                 
-                # Insert invisible text at position
-                page.insert_textbox(
-                    rect,
+                # Insert invisible text that can be searched and selected
+                page.insert_text(
+                    point,
                     text_block.text,
                     fontsize=font_size,
-                    color=(0, 0, 0),
-                    fill_opacity=self.text_opacity,  # Invisible
-                    overlay=True
+                    color=(1, 1, 1),  # White text (invisible on white background)
+                    overlay=True,
+                    render_mode=3  # Fill text with rendering mode for searchability
                 )
             
             return True
             
         except Exception as e:
             print(f"Error adding text layer: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def create_searchable_pdf(
