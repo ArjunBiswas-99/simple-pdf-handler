@@ -109,7 +109,7 @@ class ContentArea(QGraphicsView):
         self.render_all_pages()
     
     def render_all_pages(self):
-        """Render all pages of the PDF in continuous scroll mode."""
+        """Set up page structure and render visible pages only (lazy loading)."""
         if not self._pdf_document or not self._pdf_document.is_open:
             return
         
@@ -118,34 +118,47 @@ class ContentArea(QGraphicsView):
         self._page_items = []
         self._page_positions = []
         
-        # Render each page and stack them vertically
+        # Calculate page positions and create placeholders
         y_offset = 0
         max_width = 0
         
         for page_num in range(self._pdf_document.page_count):
-            # Render the page
-            pixmap = self._pdf_document.render_page(page_num)
+            # Get page size to calculate position
+            page_size = self._pdf_document.get_page_size(page_num)
             
-            if pixmap and not pixmap.isNull():
-                # Add pixmap to scene
-                item = self.scene.addPixmap(pixmap)
-                item.setPos(0, y_offset)
+            if page_size:
+                width, height = page_size
+                zoom_factor = self._pdf_document.zoom_level / 100.0
+                rendered_width = width * zoom_factor
+                rendered_height = height * zoom_factor
                 
-                # Store item and position
-                self._page_items.append(item)
+                # Create placeholder item (will be replaced with actual render on-demand)
+                from PySide6.QtWidgets import QGraphicsRectItem
+                from PySide6.QtGui import QBrush, QColor, QPen
+                
+                placeholder = QGraphicsRectItem(0, y_offset, rendered_width, rendered_height)
+                placeholder.setBrush(QBrush(QColor(240, 240, 240)))  # Light gray
+                placeholder.setPen(QPen(QColor(200, 200, 200)))
+                self.scene.addItem(placeholder)
+                
+                # Store placeholder and position
+                self._page_items.append(placeholder)
                 self._page_positions.append(y_offset)
                 
                 # Update max width and y offset
-                max_width = max(max_width, pixmap.width())
-                y_offset += pixmap.height() + self._page_spacing
+                max_width = max(max_width, rendered_width)
+                y_offset += rendered_height + self._page_spacing
         
         # Update scene rect to fit all pages
         if self._page_items:
-            total_height = y_offset - self._page_spacing  # Remove last spacing
+            total_height = y_offset - self._page_spacing
             self.scene.setSceneRect(0, 0, max_width, total_height)
             
             # Scroll to top
             self.verticalScrollBar().setValue(0)
+            
+            # Render only visible pages
+            self._render_visible_pages()
             
             # Update current page
             self._update_current_page()
@@ -245,14 +258,86 @@ class ContentArea(QGraphicsView):
     
     def scrollContentsBy(self, dx: int, dy: int):
         """
-        Override scroll event to update current page.
+        Override scroll event to update current page and render visible pages.
         
         Args:
             dx: Horizontal scroll delta
             dy: Vertical scroll delta
         """
         super().scrollContentsBy(dx, dy)
+        self._render_visible_pages()  # Lazy render on scroll
         self._update_current_page()
+    
+    def _get_visible_page_range(self):
+        """
+        Get the range of pages currently visible in the viewport.
+        
+        Returns:
+            Tuple of (first_visible_page, last_visible_page) or (0, 0) if none
+        """
+        if not self._page_positions:
+            return (0, 0)
+        
+        # Get viewport rectangle in scene coordinates
+        viewport_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+        viewport_top = viewport_rect.top()
+        viewport_bottom = viewport_rect.bottom()
+        
+        # Add buffer: render 1 page above and below visible area
+        buffer_pages = 1
+        
+        first_page = None
+        last_page = None
+        
+        for page_num, y_pos in enumerate(self._page_positions):
+            if page_num < len(self._page_items):
+                page_item = self._page_items[page_num]
+                
+                # Get page height (might be placeholder or rendered)
+                if isinstance(page_item, QGraphicsPixmapItem):
+                    page_height = page_item.pixmap().height()
+                else:
+                    page_height = page_item.rect().height()
+                
+                page_bottom = y_pos + page_height
+                
+                # Check if page is visible (or near visible)
+                if page_bottom >= viewport_top and y_pos <= viewport_bottom:
+                    if first_page is None:
+                        first_page = max(0, page_num - buffer_pages)
+                    last_page = min(len(self._page_positions) - 1, page_num + buffer_pages)
+        
+        if first_page is not None and last_page is not None:
+            return (first_page, last_page)
+        
+        return (0, 0)
+    
+    def _render_visible_pages(self):
+        """Render only the pages currently visible in the viewport."""
+        if not self._pdf_document or not self._pdf_document.is_open:
+            return
+        
+        first_page, last_page = self._get_visible_page_range()
+        
+        for page_num in range(first_page, last_page + 1):
+            if page_num < len(self._page_items):
+                page_item = self._page_items[page_num]
+                
+                # Check if this is still a placeholder (not yet rendered)
+                if not isinstance(page_item, QGraphicsPixmapItem):
+                    # Render this page
+                    pixmap = self._pdf_document.render_page(page_num)
+                    
+                    if pixmap and not pixmap.isNull():
+                        # Remove placeholder
+                        self.scene.removeItem(page_item)
+                        
+                        # Add rendered pixmap
+                        rendered_item = self.scene.addPixmap(pixmap)
+                        rendered_item.setPos(0, self._page_positions[page_num])
+                        
+                        # Replace in list
+                        self._page_items[page_num] = rendered_item
     
     def zoom_in(self):
         """Zoom in by 25%."""

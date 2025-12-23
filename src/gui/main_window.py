@@ -115,6 +115,8 @@ class MainWindow(QMainWindow):
         self.menu_bar_widget.close_file_requested.connect(self._handle_close_file)
         self.menu_bar_widget.copy_requested.connect(self.content_area.copy_selected_text)
         self.menu_bar_widget.exit_requested.connect(self.close)
+        self.menu_bar_widget.zoom_in_requested.connect(self._handle_zoom_in)
+        self.menu_bar_widget.zoom_out_requested.connect(self._handle_zoom_out)
         self.menu_bar_widget.theme_toggle_requested.connect(self._handle_theme_toggle)
         self.menu_bar_widget.about_requested.connect(self._show_about_dialog)
         
@@ -295,15 +297,37 @@ class MainWindow(QMainWindow):
     
     def _handle_zoom_in(self):
         """Handle zoom in request."""
-        current_zoom = self.status_bar_widget._zoom_level
-        new_zoom = min(200, current_zoom + 25)
+        if not self.pdf_document or not self.pdf_document.is_open:
+            return
+        
+        current_zoom = self.pdf_document.zoom_level
+        new_zoom = min(400, current_zoom + 25)  # Max 400%
+        
+        # Update PDF document zoom
+        self.pdf_document.zoom_level = new_zoom
+        
+        # Re-render all pages at new zoom
+        self.content_area.render_all_pages()
+        
+        # Update status bar
         self.status_bar_widget.set_zoom_level(new_zoom)
         self.status_bar_widget.show_message(f"Zoom: {int(new_zoom)}%", 1000)
     
     def _handle_zoom_out(self):
         """Handle zoom out request."""
-        current_zoom = self.status_bar_widget._zoom_level
-        new_zoom = max(50, current_zoom - 25)
+        if not self.pdf_document or not self.pdf_document.is_open:
+            return
+        
+        current_zoom = self.pdf_document.zoom_level
+        new_zoom = max(25, current_zoom - 25)  # Min 25%
+        
+        # Update PDF document zoom
+        self.pdf_document.zoom_level = new_zoom
+        
+        # Re-render all pages at new zoom
+        self.content_area.render_all_pages()
+        
+        # Update status bar
         self.status_bar_widget.set_zoom_level(new_zoom)
         self.status_bar_widget.show_message(f"Zoom: {int(new_zoom)}%", 1000)
     
@@ -313,14 +337,22 @@ class MainWindow(QMainWindow):
     
     def _handle_zoom_change(self, zoom_level: float):
         """
-        Handle zoom level change.
+        Handle zoom level change from status bar.
         
         Args:
             zoom_level: New zoom level as percentage
         """
-        # For Phase 1, just acknowledge
-        # TODO Phase 2: Apply zoom to content area
-        pass
+        if not self.pdf_document or not self.pdf_document.is_open:
+            return
+        
+        # Update PDF document zoom
+        self.pdf_document.zoom_level = zoom_level
+        
+        # Re-render all pages at new zoom
+        self.content_area.render_all_pages()
+        
+        # Show feedback
+        self.status_bar_widget.show_message(f"Zoom: {int(zoom_level)}%", 1000)
     
     def _show_about_dialog(self):
         """Show the about dialog."""
