@@ -1,8 +1,9 @@
 """
-Simple PDF Handler - Source Package
+Simple PDF Handler - Professional PDF Management Application
 
-Copyright (C) 2024
-Licensed under GNU General Public License v3.0
+A cross-platform PDF viewer, editor, and management tool built with PySide6.
 """
 
 __version__ = "1.0.0"
+__author__ = "Development Team"
+__license__ = "GNU GPL v3.0"

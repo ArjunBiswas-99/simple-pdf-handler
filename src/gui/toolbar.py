@@ -1,0 +1,428 @@
+"""
+Toolbar component with ribbon interface.
+
+Provides organized access to tools through tabbed interface.
+"""
+
+from PySide6.QtWidgets import (
+    QToolBar, QWidget, QHBoxLayout, QVBoxLayout, QToolButton, 
+    QLabel, QSizePolicy, QTabWidget, QButtonGroup
+)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
+
+from utils.constants import Icons, Spacing, Fonts
+
+
+class Toolbar(QToolBar):
+    """
+    Application toolbar with ribbon-style interface.
+    
+    Organizes tools into tabs (Home, Edit, Annotate, Page, Convert).
+    Each tab contains grouped buttons for related operations.
+    """
+    
+    # Signals
+    open_file_requested = Signal()
+    save_file_requested = Signal()
+    print_requested = Signal()
+    
+    undo_requested = Signal()
+    redo_requested = Signal()
+    
+    zoom_in_requested = Signal()
+    zoom_out_requested = Signal()
+    rotate_requested = Signal()
+    
+    def __init__(self, parent=None):
+        """
+        Initialize toolbar.
+        
+        Args:
+            parent: Parent widget
+        """
+        super().__init__("Main Toolbar", parent)
+        
+        self.setMovable(False)
+        self.setFloatable(False)
+        self.setIconSize(self.iconSize() * 1.2)  # Slightly larger icons
+        
+        self._document_actions = []
+        self._current_tab = "Home"
+        
+        self._create_toolbar()
+    
+    def _create_toolbar(self):
+        """Create the complete toolbar with tab selector and tool groups."""
+        # Create container widget
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(Spacing.SMALL, Spacing.SMALL, Spacing.SMALL, Spacing.SMALL)
+        layout.setSpacing(Spacing.MEDIUM)
+        
+        # Tab selector buttons
+        self.tab_selector = self._create_tab_selector()
+        layout.addWidget(self.tab_selector)
+        
+        # Separator
+        layout.addWidget(self._create_separator())
+        
+        # Tool groups container (will switch based on tab)
+        self.tools_container = QWidget()
+        self.tools_layout = QHBoxLayout(self.tools_container)
+        self.tools_layout.setContentsMargins(0, 0, 0, 0)
+        self.tools_layout.setSpacing(Spacing.MEDIUM)
+        layout.addWidget(self.tools_container)
+        
+        # Create all tab contents
+        self.tab_contents = {
+            "Home": self._create_home_tools(),
+            "Edit": self._create_edit_tools(),
+            "Annotate": self._create_annotate_tools(),
+            "Page": self._create_page_tools(),
+            "Convert": self._create_convert_tools()
+        }
+        
+        # Show Home tab by default
+        self._switch_tab("Home")
+        
+        # Add spacer
+        layout.addStretch()
+        
+        self.addWidget(container)
+    
+    def _create_tab_selector(self) -> QWidget:
+        """
+        Create tab selector button group.
+        
+        Returns:
+            Widget containing tab buttons
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        
+        # Label
+        label = QLabel("Tools:")
+        label_font = QFont()
+        label_font.setPointSize(Fonts.SIZE_SMALL)
+        label.setFont(label_font)
+        layout.addWidget(label)
+        
+        # Button group for exclusive selection
+        self.tab_buttons = QButtonGroup(self)
+        self.tab_buttons.setExclusive(True)
+        
+        # Create buttons for each tab
+        tabs = ["Home", "Edit", "Annotate", "Page", "Convert"]
+        for tab in tabs:
+            btn = QToolButton()
+            btn.setText(tab)
+            btn.setCheckable(True)
+            btn.setAutoRaise(True)
+            btn.clicked.connect(lambda checked, t=tab: self._switch_tab(t))
+            
+            if tab == "Home":
+                btn.setChecked(True)
+            
+            self.tab_buttons.addButton(btn)
+            layout.addWidget(btn)
+        
+        return widget
+    
+    def _create_separator(self) -> QWidget:
+        """
+        Create vertical separator.
+        
+        Returns:
+            Separator widget
+        """
+        separator = QWidget()
+        separator.setFixedWidth(2)
+        separator.setProperty("separator", True)
+        return separator
+    
+    def _create_home_tools(self) -> QWidget:
+        """
+        Create Home tab tools.
+        
+        Returns:
+            Widget containing Home tools
+        """
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(Spacing.MEDIUM)
+        
+        # File group
+        file_group = self._create_tool_group("File", [
+            (f"{Icons.OPEN}\nOpen", "Open PDF file (Ctrl+O)", self.open_file_requested.emit, False),
+            (f"{Icons.SAVE}\nSave", "Save document (Ctrl+S)", self.save_file_requested.emit, True),
+            (f"{Icons.PRINT}\nPrint", "Print document (Ctrl+P)", self.print_requested.emit, True),
+        ])
+        layout.addWidget(file_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # View group
+        view_group = self._create_tool_group("View", [
+            (f"{Icons.ZOOM_IN}\nZoom In", "Zoom in (Ctrl++)", self.zoom_in_requested.emit, True),
+            (f"{Icons.ZOOM_OUT}\nZoom Out", "Zoom out (Ctrl+-)", self.zoom_out_requested.emit, True),
+            (f"{Icons.FIT_PAGE}\nFit Page", "Fit page to window (Ctrl+0)", lambda: None, True),
+        ])
+        layout.addWidget(view_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Rotate group
+        rotate_group = self._create_tool_group("Rotate", [
+            (f"{Icons.ROTATE}\nRotate", "Rotate page (Ctrl+R)", self.rotate_requested.emit, True),
+        ])
+        layout.addWidget(rotate_group)
+        
+        return widget
+    
+    def _create_edit_tools(self) -> QWidget:
+        """
+        Create Edit tab tools.
+        
+        Returns:
+            Widget containing Edit tools
+        """
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(Spacing.MEDIUM)
+        
+        # Undo/Redo group
+        history_group = self._create_tool_group("History", [
+            (f"{Icons.UNDO}\nUndo", "Undo (Ctrl+Z)", self.undo_requested.emit, True),
+            (f"{Icons.REDO}\nRedo", "Redo (Ctrl+Y)", self.redo_requested.emit, True),
+        ])
+        layout.addWidget(history_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Clipboard group
+        clipboard_group = self._create_tool_group("Clipboard", [
+            ("✂\nCut", "Cut (Ctrl+X)", lambda: self._show_coming_soon("Cut"), True),
+            ("📋\nCopy", "Copy (Ctrl+C)", lambda: self._show_coming_soon("Copy"), True),
+            ("📄\nPaste", "Paste (Ctrl+V)", lambda: self._show_coming_soon("Paste"), True),
+        ])
+        layout.addWidget(clipboard_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Selection group
+        selection_group = self._create_tool_group("Selection", [
+            ("⬜\nSelect All", "Select all (Ctrl+A)", lambda: self._show_coming_soon("Select All"), True),
+            ("🗑\nDelete", "Delete selected", lambda: self._show_coming_soon("Delete"), True),
+        ])
+        layout.addWidget(selection_group)
+        
+        return widget
+    
+    def _create_annotate_tools(self) -> QWidget:
+        """
+        Create Annotate tab tools.
+        
+        Returns:
+            Widget containing Annotate tools
+        """
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(Spacing.MEDIUM)
+        
+        # Markup group
+        markup_group = self._create_tool_group("Markup", [
+            (f"{Icons.HIGHLIGHT}\nHighlight", "Highlight text", lambda: self._show_coming_soon("Highlight"), True),
+            ("📝\nUnderline", "Underline text", lambda: self._show_coming_soon("Underline"), True),
+            ("⚡\nStrikethrough", "Strikethrough text", lambda: self._show_coming_soon("Strikethrough"), True),
+        ])
+        layout.addWidget(markup_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Comments group
+        comments_group = self._create_tool_group("Comments", [
+            (f"{Icons.COMMENT}\nComment", "Add comment", lambda: self._show_coming_soon("Comment"), True),
+            (f"{Icons.NOTE}\nNote", "Add sticky note", lambda: self._show_coming_soon("Note"), True),
+        ])
+        layout.addWidget(comments_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Drawing group
+        drawing_group = self._create_tool_group("Drawing", [
+            (f"{Icons.STAMP}\nStamp", "Add stamp", lambda: self._show_coming_soon("Stamp"), True),
+            ("🔺\nShapes", "Draw shapes", lambda: self._show_coming_soon("Shapes"), True),
+            ("📏\nMeasure", "Measurement tool", lambda: self._show_coming_soon("Measure"), True),
+        ])
+        layout.addWidget(drawing_group)
+        
+        return widget
+    
+    def _create_page_tools(self) -> QWidget:
+        """
+        Create Page tab tools.
+        
+        Returns:
+            Widget containing Page tools
+        """
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(Spacing.MEDIUM)
+        
+        # Organize group
+        organize_group = self._create_tool_group("Organize", [
+            ("➕\nInsert", "Insert page", lambda: self._show_coming_soon("Insert Page"), True),
+            ("➖\nDelete", "Delete page", lambda: self._show_coming_soon("Delete Page"), True),
+            ("📤\nExtract", "Extract pages", lambda: self._show_coming_soon("Extract Pages"), True),
+        ])
+        layout.addWidget(organize_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Manipulate group
+        manipulate_group = self._create_tool_group("Manipulate", [
+            (f"{Icons.ROTATE}\nRotate", "Rotate page", self.rotate_requested.emit, True),
+            ("✂\nCrop", "Crop page", lambda: self._show_coming_soon("Crop Page"), True),
+            ("🔄\nReorder", "Reorder pages", lambda: self._show_coming_soon("Reorder Pages"), True),
+        ])
+        layout.addWidget(manipulate_group)
+        
+        return widget
+    
+    def _create_convert_tools(self) -> QWidget:
+        """
+        Create Convert tab tools.
+        
+        Returns:
+            Widget containing Convert tools
+        """
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(Spacing.MEDIUM)
+        
+        # Export group
+        export_group = self._create_tool_group("Export", [
+            (f"{Icons.EXPORT}\nWord", "Export to Word", lambda: self._show_coming_soon("Export to Word"), True),
+            (f"{Icons.EXPORT}\nExcel", "Export to Excel", lambda: self._show_coming_soon("Export to Excel"), True),
+            (f"{Icons.EXPORT}\nImage", "Export to Image", lambda: self._show_coming_soon("Export to Image"), True),
+        ])
+        layout.addWidget(export_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # Import group
+        import_group = self._create_tool_group("Import", [
+            (f"{Icons.IMPORT}\nFrom Word", "Import Word doc", lambda: self._show_coming_soon("Import Word"), True),
+            (f"{Icons.IMPORT}\nFrom Image", "Import image", lambda: self._show_coming_soon("Import Image"), True),
+        ])
+        layout.addWidget(import_group)
+        
+        layout.addWidget(self._create_separator())
+        
+        # OCR group
+        ocr_group = self._create_tool_group("OCR", [
+            ("🔍\nScan Text", "OCR recognition", lambda: self._show_coming_soon("OCR"), True),
+        ])
+        layout.addWidget(ocr_group)
+        
+        return widget
+    
+    def _create_tool_group(self, title: str, tools: list) -> QWidget:
+        """
+        Create a group of tool buttons.
+        
+        Args:
+            title: Group title
+            tools: List of (text, tooltip, callback, is_document_action) tuples
+        
+        Returns:
+            Widget containing the tool group
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        
+        # Group title
+        title_label = QLabel(title)
+        title_font = QFont()
+        title_font.setPointSize(Fonts.SIZE_SMALL)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Tool buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(Spacing.SMALL)
+        
+        for text, tooltip, callback, is_doc_action in tools:
+            btn = QToolButton()
+            btn.setText(text)
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setToolTip(tooltip)
+            btn.setAutoRaise(True)
+            btn.setMinimumWidth(60)
+            btn.clicked.connect(callback)
+            
+            if is_doc_action:
+                self._document_actions.append(btn)
+            
+            buttons_layout.addWidget(btn)
+        
+        layout.addLayout(buttons_layout)
+        
+        return widget
+    
+    def _switch_tab(self, tab_name: str):
+        """
+        Switch to a different tool tab.
+        
+        Args:
+            tab_name: Name of tab to switch to
+        """
+        self._current_tab = tab_name
+        
+        # Clear current tools
+        while self.tools_layout.count():
+            item = self.tools_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+        
+        # Add new tools
+        if tab_name in self.tab_contents:
+            self.tools_layout.addWidget(self.tab_contents[tab_name])
+            self.tab_contents[tab_name].show()
+    
+    def _show_coming_soon(self, feature: str):
+        """
+        Show coming soon message.
+        
+        Args:
+            feature: Feature name
+        """
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self,
+            "Coming Soon",
+            f"{feature} will be available in Phase 2.\n\n"
+            "This feature is part of our development roadmap."
+        )
+    
+    def set_document_actions_enabled(self, enabled: bool):
+        """
+        Enable or disable document-specific actions.
+        
+        Args:
+            enabled: Whether to enable actions
+        """
+        for action in self._document_actions:
+            action.setEnabled(enabled)
