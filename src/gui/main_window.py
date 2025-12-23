@@ -74,6 +74,12 @@ class MainWindow(QMainWindow):
         redo_shortcut.setShortcut(QKeySequence.Redo)  # Cmd+Shift+Z on Mac, Ctrl+Y on Windows/Linux
         redo_shortcut.triggered.connect(self._handle_redo)
         self.addAction(redo_shortcut)
+        
+        # Add keyboard shortcut for save
+        save_shortcut = QAction(self)
+        save_shortcut.setShortcut(QKeySequence.Save)  # Cmd+S on Mac, Ctrl+S on Windows/Linux
+        save_shortcut.triggered.connect(self._handle_save_file)
+        self.addAction(save_shortcut)
     
     def _create_components(self):
         """Create all UI components."""
@@ -245,20 +251,26 @@ class MainWindow(QMainWindow):
     
     def _handle_save_file(self):
         """Handle save file request."""
-        if not self._current_document:
+        if not self._current_document or not self.pdf_document:
             return
         
-        # For Phase 1, just show a message
-        QMessageBox.information(
-            self,
-            "Save File",
-            "File saving will be implemented in Phase 2.\n\n"
-            "This feature will save your changes to the PDF."
-        )
+        # Check if document has unsaved changes
+        if not self.pdf_document.is_modified():
+            self.status_bar_widget.show_message("No changes to save", 2000)
+            return
         
-        # TODO Phase 2: Implement actual saving
-        # self._is_modified = False
-        # self._update_window_state()
+        # Save the document
+        if self.pdf_document.save():
+            # Save successful
+            from pathlib import Path
+            filename = Path(self._current_document).name
+            self.status_bar_widget.show_message(f"Saved {filename}", 3000)
+            
+            # Update window title (remove asterisk)
+            self._update_window_state()
+        else:
+            # Save failed (error will be shown via error_occurred signal)
+            pass
     
     def _handle_open_recent(self, file_path: str):
         """

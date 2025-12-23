@@ -609,7 +609,7 @@ class ContentArea(QGraphicsView):
         # Cmd/Ctrl modifier detection
         is_command_ctrl = modifiers & (Qt.ControlModifier | Qt.MetaModifier)
         
-        # Pass undo/redo shortcuts to parent MainWindow
+        # Pass undo/redo/save shortcuts to parent MainWindow
         if is_command_ctrl:
             if key == Qt.Key_Z and not (modifiers & Qt.ShiftModifier):
                 # Cmd+Z / Ctrl+Z: Undo - let parent handle it
@@ -621,6 +621,10 @@ class ContentArea(QGraphicsView):
                 return
             elif key == Qt.Key_Y:
                 # Cmd+Y / Ctrl+Y: Redo - let parent handle it
+                event.ignore()  # Pass to parent
+                return
+            elif key == Qt.Key_S:
+                # Cmd+S / Ctrl+S: Save - let parent handle it
                 event.ignore()  # Pass to parent
                 return
         

@@ -87,6 +87,35 @@ class PDFDocument(QObject):
             self.error_occurred.emit(f"Failed to open PDF: {str(e)}")
             return False
     
+    def save(self) -> bool:
+        """
+        Save the current document with all annotations.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._doc or not self._file_path:
+            self.error_occurred.emit("No document open to save")
+            return False
+        
+        try:
+            # Save with incremental update (faster, only saves changes)
+            # encryption=fitz.PDF_ENCRYPT_KEEP preserves existing encryption
+            self._doc.save(
+                self._file_path,
+                incremental=True,
+                encryption=fitz.PDF_ENCRYPT_KEEP
+            )
+            
+            # Mark as saved (clear dirty flag)
+            self.mark_saved()
+            
+            return True
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to save document: {str(e)}")
+            return False
+    
     def close(self):
         """Close the current document."""
         if self._doc:
