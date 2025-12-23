@@ -28,6 +28,8 @@ class ContentArea(QGraphicsView):
     zoom_changed = Signal(float)  # Emitted when zoom changes
     text_copied = Signal(str)  # Emitted when text is copied (word count message)
     text_selected = Signal(str)  # Emitted when text is selected (word count message)
+    image_selected = Signal(str)  # Emitted when image is selected
+    image_copied = Signal(str)  # Emitted when image is copied
     selection_mode_changed = Signal(bool)  # Emitted when selection mode changes
     
     def __init__(self, parent=None):
@@ -71,6 +73,10 @@ class ContentArea(QGraphicsView):
         self._selected_text = ""  # The selected text content
         self._selected_word_rects = []  # List of QGraphicsRectItem for yellow highlights
         self._selection_data = None  # Store selection coordinates for copying
+        
+        # Image selection state
+        self._selected_image = None  # Tuple: (page_num, xref, width, height, pixmap)
+        self._selected_image_border = None  # QGraphicsRectItem for orange border
         
         # Show placeholder
         self._show_placeholder()
@@ -319,7 +325,7 @@ class ContentArea(QGraphicsView):
     
     def mousePressEvent(self, event):
         """
-        Handle mouse press for text selection or panning.
+        Handle mouse press for image/text selection or panning.
         
         Args:
             event: Mouse press event
@@ -327,18 +333,27 @@ class ContentArea(QGraphicsView):
         if event.button() == Qt.LeftButton:
             # Check if in selection mode and not holding spacebar
             if self._selection_mode and not self._spacebar_pressed:
-                # Selection mode: Start text selection
-                self.setDragMode(QGraphicsView.NoDrag)
-                self._is_selecting = True
-                self._selection_start = self.mapToScene(event.pos())
-                self._selection_end = self._selection_start
+                # Selection mode: Check if click is on an image first
+                click_pos = self.mapToScene(event.pos())
+                image_info = self._find_image_at_position(click_pos)
                 
-                # Remove old selection rectangle if exists
-                if self._selection_rect_item:
-                    self.scene.removeItem(self._selection_rect_item)
-                    self._selection_rect_item = None
-                
-                event.accept()
+                if image_info:
+                    # Click on image: Select it
+                    self._select_image(image_info)
+                    event.accept()
+                else:
+                    # Click on text area: Start text selection
+                    self.setDragMode(QGraphicsView.NoDrag)
+                    self._is_selecting = True
+                    self._selection_start = click_pos
+                    self._selection_end = self._selection_start
+                    
+                    # Remove old selection rectangle if exists
+                    if self._selection_rect_item:
+                        self.scene.removeItem(self._selection_rect_item)
+                        self._selection_rect_item = None
+                    
+                    event.accept()
             else:
                 # Pan mode: Enable dragging
                 self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -387,9 +402,20 @@ class ContentArea(QGraphicsView):
             
             event.accept()
         elif event.button() == Qt.LeftButton and self._selection_mode:
-            # Click on empty area - clear selection
-            self.clear_selection()
-            super().mouseReleaseEvent(event)
+            # Only clear if clicking on empty area (not on an image)
+            click_pos = self.mapToScene(event.pos())
+            image_info = self._find_image_at_position(click_pos)
+            
+            if not image_info and not (self._selected_text or self._selected_image):
+                # Clicked on empty area with no selection - do nothing
+                super().mouseReleaseEvent(event)
+            elif not image_info:
+                # Clicked on empty area with existing selection - clear it
+                self.clear_selection()
+                super().mouseReleaseEvent(event)
+            else:
+                # Clicked on image - already handled in mousePressEvent
+                event.accept()
         else:
             super().mouseReleaseEvent(event)
     
@@ -544,18 +570,29 @@ class ContentArea(QGraphicsView):
             self.text_selected.emit(f"Selected {word_count} words - Press Ctrl+C to copy")
     
     def clear_selection(self):
-        """Clear the current text selection and highlights."""
-        # Remove all highlight rectangles
+        """Clear the current text or image selection and highlights."""
+        # Remove text highlight rectangles
         for rect_item in self._selected_word_rects:
             self.scene.removeItem(rect_item)
         
         self._selected_word_rects = []
         self._selected_text = ""
         self._selection_data = None
+        
+        # Remove image border
+        if self._selected_image_border:
+            self.scene.removeItem(self._selected_image_border)
+            self._selected_image_border = None
+        
+        self._selected_image = None
     
     def copy_selected_text(self):
-        """Copy the currently selected text to clipboard."""
-        if self._selected_text:
+        """Copy the currently selected text or image to clipboard."""
+        # Check if we have a selected image
+        if self._selected_image:
+            self._copy_selected_image()
+        elif self._selected_text:
+            # Copy text
             from PySide6.QtWidgets import QApplication
             
             clipboard = QApplication.clipboard()
@@ -564,3 +601,104 @@ class ContentArea(QGraphicsView):
             # Emit signal for status bar feedback
             word_count = len(self._selected_text.split())
             self.text_copied.emit(f"Copied {word_count} words to clipboard")
+    
+    def _find_image_at_position(self, scene_pos: QPointF):
+        """
+        Find if click position is on an image.
+        
+        Args:
+            scene_pos: Click position in scene coordinates
+            
+        Returns:
+            Tuple (page_num, x0, y0, x1, y1, xref, width, height) or None
+        """
+        if not self._pdf_document:
+            return None
+        
+        # Find which page the click is on
+        zoom_factor = self._pdf_document.zoom_level / 100.0
+        
+        for page_num, page_y_offset in enumerate(self._page_positions):
+            if page_num < len(self._page_items):
+                page_item = self._page_items[page_num]
+                page_height = page_item.pixmap().height()
+                page_bottom = page_y_offset + page_height
+                
+                # Check if click is on this page
+                if page_y_offset <= scene_pos.y() <= page_bottom:
+                    # Convert click position to PDF coordinates
+                    page_click_y = scene_pos.y() - page_y_offset
+                    pdf_x = scene_pos.x() / zoom_factor
+                    pdf_y = page_click_y / zoom_factor
+                    
+                    # Get images on this page
+                    images = self._pdf_document.get_images_on_page(page_num)
+                    
+                    # Check if click is within any image
+                    for img_x0, img_y0, img_x1, img_y1, xref, width, height in images:
+                        if img_x0 <= pdf_x <= img_x1 and img_y0 <= pdf_y <= img_y1:
+                            return (page_num, img_x0, img_y0, img_x1, img_y1, xref, width, height)
+        
+        return None
+    
+    def _select_image(self, image_info):
+        """
+        Select an image and draw border highlight.
+        
+        Args:
+            image_info: Tuple (page_num, x0, y0, x1, y1, xref, width, height)
+        """
+        # Clear any previous selection (text or image)
+        self.clear_selection()
+        
+        from PySide6.QtWidgets import QGraphicsRectItem
+        from PySide6.QtGui import QColor, QPen
+        
+        page_num, img_x0, img_y0, img_x1, img_y1, xref, width, height = image_info
+        
+        # Get the image data
+        image_pixmap = self._pdf_document.get_image_data(page_num, xref)
+        
+        # Store selected image info
+        self._selected_image = (page_num, xref, width, height, image_pixmap)
+        
+        # Convert image rectangle to scene coordinates
+        zoom_factor = self._pdf_document.zoom_level / 100.0
+        page_y_offset = self._page_positions[page_num]
+        
+        scene_x0 = img_x0 * zoom_factor
+        scene_y0 = (img_y0 * zoom_factor) + page_y_offset
+        scene_x1 = img_x1 * zoom_factor
+        scene_y1 = (img_y1 * zoom_factor) + page_y_offset
+        
+        # Create border rectangle
+        border_rect = QRectF(scene_x0, scene_y0, scene_x1 - scene_x0, scene_y1 - scene_y0)
+        self._selected_image_border = QGraphicsRectItem(border_rect)
+        
+        # Style: Orange border, no fill, 3px width
+        orange_color = QColor(255, 102, 0)  # Orange
+        self._selected_image_border.setPen(QPen(orange_color, 3))
+        self._selected_image_border.setBrush(Qt.NoBrush)
+        
+        # Add to scene
+        self.scene.addItem(self._selected_image_border)
+        
+        # Emit signal for status bar
+        self.image_selected.emit(f"Image selected ({width}x{height} px) - Press Ctrl+C to copy")
+    
+    def _copy_selected_image(self):
+        """Copy the selected image to clipboard."""
+        if not self._selected_image:
+            return
+        
+        from PySide6.QtWidgets import QApplication
+        
+        page_num, xref, width, height, image_pixmap = self._selected_image
+        
+        if image_pixmap:
+            # Copy image to clipboard
+            clipboard = QApplication.clipboard()
+            clipboard.setPixmap(image_pixmap)
+            
+            # Emit signal for status bar
+            self.image_copied.emit(f"Copied image ({width}x{height} px) to clipboard")

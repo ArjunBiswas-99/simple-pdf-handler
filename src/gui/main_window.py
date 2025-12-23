@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         # Menu bar actions
         self.menu_bar_widget.open_file_requested.connect(self._handle_open_file)
         self.menu_bar_widget.close_file_requested.connect(self._handle_close_file)
+        self.menu_bar_widget.copy_requested.connect(self.content_area.copy_selected_text)
         self.menu_bar_widget.exit_requested.connect(self.close)
         self.menu_bar_widget.theme_toggle_requested.connect(self._handle_theme_toggle)
         self.menu_bar_widget.about_requested.connect(self._show_about_dialog)
@@ -141,6 +142,8 @@ class MainWindow(QMainWindow):
         self.content_area.page_changed.connect(self._on_page_changed)
         self.content_area.text_copied.connect(self._on_text_copied)
         self.content_area.text_selected.connect(self._on_text_selected)
+        self.content_area.image_selected.connect(self._on_image_selected)
+        self.content_area.image_copied.connect(self._on_image_copied)
         self.content_area.selection_mode_changed.connect(self.toolbar_widget.set_select_text_mode)
         
         # Status bar updates
@@ -421,6 +424,26 @@ class MainWindow(QMainWindow):
         """
         # Show message in status bar
         self.status_bar_widget.show_message(message, 5000)  # Longer duration for selection message
+    
+    def _on_image_selected(self, message: str):
+        """
+        Handle image selected event from content area.
+        
+        Args:
+            message: Feedback message to display
+        """
+        # Show message in status bar
+        self.status_bar_widget.show_message(message, 5000)
+    
+    def _on_image_copied(self, message: str):
+        """
+        Handle image copied event from content area.
+        
+        Args:
+            message: Feedback message to display
+        """
+        # Show message in status bar
+        self.status_bar_widget.show_message(message, 3000)
     
     def _render_current_page(self):
         """Render the current page and display it."""

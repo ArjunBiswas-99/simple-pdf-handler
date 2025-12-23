@@ -29,6 +29,7 @@ class MenuBar(QMenuBar):
     
     undo_requested = Signal()
     redo_requested = Signal()
+    copy_requested = Signal()  # Copy selected content (text or image)
     
     zoom_in_requested = Signal()
     zoom_out_requested = Signal()
@@ -158,7 +159,7 @@ class MenuBar(QMenuBar):
         copy_action = QAction("&Copy", self)
         copy_action.setShortcut(QKeySequence.Copy)
         copy_action.setStatusTip("Copy selected content")
-        copy_action.triggered.connect(lambda: self._show_coming_soon("Copy"))
+        copy_action.triggered.connect(self.copy_requested.emit)
         edit_menu.addAction(copy_action)
         self._document_actions.append(copy_action)
         

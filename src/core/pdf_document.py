@@ -375,3 +375,89 @@ class PDFDocument(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Failed to get word boxes: {str(e)}")
             return []
+    
+    def get_images_on_page(self, page_number: int) -> list:
+        """
+        Get bounding boxes of images on a page.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            List of tuples: [(x0, y0, x1, y1, xref, width, height), ...]
+            where xref is the image reference number
+        """
+        if not self._doc or page_number < 0 or page_number >= self._page_count:
+            return []
+        
+        try:
+            page = self._doc[page_number]
+            
+            # Get all images on the page
+            image_list = page.get_images()
+            image_info = []
+            
+            for img in image_list:
+                xref = img[0]  # Image reference number
+                
+                # Get image bounding box
+                try:
+                    # Get all image instances on the page
+                    img_instances = page.get_image_rects(xref)
+                    
+                    for rect in img_instances:
+                        # rect is a fitz.Rect object
+                        x0, y0, x1, y1 = rect.x0, rect.y0, rect.x1, rect.y1
+                        
+                        # Get image dimensions
+                        pix = fitz.Pixmap(self._doc, xref)
+                        width = pix.width
+                        height = pix.height
+                        pix = None  # Free memory
+                        
+                        image_info.append((x0, y0, x1, y1, xref, width, height))
+                except:
+                    continue
+            
+            return image_info
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to get images: {str(e)}")
+            return []
+    
+    def get_image_data(self, page_number: int, xref: int) -> Optional[QPixmap]:
+        """
+        Extract image data from PDF.
+        
+        Args:
+            page_number: Page number (0-indexed)
+            xref: Image reference number
+            
+        Returns:
+            QPixmap of the image, or None if error
+        """
+        if not self._doc or page_number < 0 or page_number >= self._page_count:
+            return None
+        
+        try:
+            # Extract image
+            pix = fitz.Pixmap(self._doc, xref)
+            
+            # Convert to RGB if needed (remove alpha channel)
+            if pix.alpha:
+                pix = fitz.Pixmap(fitz.csRGB, pix)
+            
+            # Convert to QImage
+            img_format = QImage.Format_RGB888
+            qimage = QImage(pix.samples, pix.width, pix.height, pix.stride, img_format)
+            
+            # Convert to QPixmap
+            pixmap = QPixmap.fromImage(qimage.copy())  # Copy to detach from pixmap data
+            
+            pix = None  # Free memory
+            
+            return pixmap
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to extract image: {str(e)}")
+            return None
